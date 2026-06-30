@@ -11,6 +11,7 @@ interface Event {
   tool: string;
   file: string;
   lines: number;
+  concepts?: string[];
 }
 
 function loadEvents(): Event[] {
@@ -66,9 +67,9 @@ function report() {
     return t >= start && t <= end;
   });
 
-  const aiLines = week
-    .filter((e) => e.author === "ai")
-    .reduce((s, e) => s + e.lines, 0);
+  const aiEvents = week.filter((e) => e.author === "ai");
+
+  const aiLines = aiEvents.reduce((s, e) => s + e.lines, 0);
 
   const totalGitLines = gitTotalLinesAdded(
     start.toISOString(),
@@ -79,17 +80,32 @@ function report() {
   const total = aiLines + youLines;
   const aiPct = total === 0 ? 0 : Math.round((aiLines / total) * 100);
 
-  const aiFiles = new Set(
-    week.filter((e) => e.author === "ai").map((e) => e.file)
-  );
+  // Count how many times each concept appeared across all AI edits
+  const conceptCounts = new Map<string, number>();
+  for (const e of aiEvents) {
+    for (const concept of e.concepts ?? []) {
+      conceptCounts.set(concept, (conceptCounts.get(concept) ?? 0) + 1);
+    }
+  }
+
+  const aiFiles = new Set(aiEvents.map((e) => e.file));
 
   console.log(`\nAI Mirror — week of ${fmt(start)} → ${fmt(end)}`);
   console.log("─".repeat(42));
   console.log(`Code shipped:        ${total} lines`);
   console.log(`  you: ${youLines}  ·  AI: ${aiLines}  →  ${aiPct}% AI-written`);
+
+  if (conceptCounts.size > 0) {
+    console.log(`\nConcepts the AI handled for you:`);
+    const sorted = [...conceptCounts.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [concept, count] of sorted) {
+      console.log(`   · ${concept.padEnd(24)} used ${count}×`);
+    }
+  }
+
   console.log(`\nFiles AI touched (${aiFiles.size}):`);
   for (const f of aiFiles) {
-    const count = week.filter((e) => e.author === "ai" && e.file === f).length;
+    const count = aiEvents.filter((e) => e.file === f).length;
     console.log(`   ${count}×  ${f}`);
   }
   console.log();

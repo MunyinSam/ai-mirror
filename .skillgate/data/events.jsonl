@@ -1,2 +1,7 @@
 {"ts":"2026-06-30T14:40:28.179Z","author":"ai","tool":"Edit","file":"d:\\Code-3\\ai-mirror\\index.ts","lines":2}
 {"ts":"2026-06-30T14:43:08.374Z","author":"ai","tool":"Write","file":"d:\\Code-3\\ai-mirror\\src\\cli\\report.ts","lines":99}
+{"ts":"2026-06-30T14:54:54.671Z","author":"ai","tool":"Write","file":"D:\\ObsidianVault\\concepts\\programming\\tree-sitter.md","lines":76}
+{"ts":"2026-06-30T14:54:58.857Z","author":"ai","tool":"Edit","file":"D:\\ObsidianVault\\concepts\\programming\\_moc.md","lines":2}
+{"ts":"2026-06-30T14:56:20.285Z","author":"ai","tool":"Write","file":"d:\\Code-3\\ai-mirror\\src\\classifier.ts","lines":84}
+{"ts":"2026-06-30T15:00:06.470Z","author":"ai","tool":"Edit","file":"d:\\Code-3\\ai-mirror\\src\\classifier.ts","lines":7,"concepts":["arrow_function"]}
+{"ts":"2026-06-30T15:01:48.801Z","author":"ai","tool":"Write","file":"d:\\Code-3\\ai-mirror\\src\\cli\\report.ts","lines":115,"concepts":["interface","arrow_function","try_catch"]}

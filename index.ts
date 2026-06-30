@@ -1,2 +1,10 @@
 // ai-mirror entry point
-const munytin = 2
+
+async function example() {
+  try {
+    const result = await fetch("https://example.com");
+    return result.json();
+  } catch (e) {
+    console.error(e);
+  }
+}
