@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "report": "bun run src/cli/report.ts"
+    "setup": "bun run setup.ts",
+    "report": "bun run report.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -13,8 +14,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@types/node": "^26.0.1",
-    "i": "^0.3.7",
+    "@anthropic-ai/sdk": "^0.107.0",
     "tree-sitter-python": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
     "web-tree-sitter": "^0.26.10"
