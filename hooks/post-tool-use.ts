@@ -1,19 +1,23 @@
-import { appendFileSync, mkdirSync } from "fs";
+import { appendFileSync, mkdirSync, existsSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { detectConcepts } from "../classifier";
 
-// Load .env from repo root
-const envPath = resolve(import.meta.dir, "../.env");
-const envText = await Bun.file(envPath).text().catch(() => "");
-for (const line of envText.split("\n")) {
-  const [key, ...rest] = line.split("=");
-  if (key && rest.length) Bun.env[key.trim()] ??= rest.join("=").trim();
-}
-
-const LOG_PATH = resolve(import.meta.dir, "../data/events.jsonl");
-mkdirSync(dirname(LOG_PATH), { recursive: true });
+const CONFIG_PATH = resolve(import.meta.dir, "../mirror.config.json");
+const config = existsSync(CONFIG_PATH)
+  ? (JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as { data_dir: string })
+  : { data_dir: resolve(import.meta.dir, "../data") };
+const LOG_PATH = resolve(config.data_dir, "events.jsonl");
+mkdirSync(config.data_dir, { recursive: true });
 
 (async () => {
+  // Load .env from repo root
+  const envPath = resolve(import.meta.dir, "../.env");
+  const envText = await Bun.file(envPath).text().catch(() => "");
+  for (const line of envText.split("\n")) {
+    const [key, ...rest] = line.split("=");
+    if (key && rest.length) Bun.env[key.trim()] ??= rest.join("=").trim();
+  }
+
   let raw = "";
   process.stdin.setEncoding("utf8");
   for await (const chunk of process.stdin) raw += chunk;

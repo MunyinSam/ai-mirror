@@ -2,7 +2,11 @@ import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { execSync } from "child_process";
 
-const LOG_PATH = resolve(import.meta.dir, "data/events.jsonl");
+const CONFIG_PATH = resolve(import.meta.dir, "mirror.config.json");
+const config = existsSync(CONFIG_PATH)
+  ? (JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as { data_dir: string })
+  : { data_dir: resolve(import.meta.dir, "data") };
+const LOG_PATH = resolve(config.data_dir, "events.jsonl");
 
 interface Event {
   ts: string;
