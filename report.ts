@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { execSync } from "child_process";
@@ -42,11 +43,20 @@ function fmt(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+// Normalize project paths so the same repo isn't split by drive-letter case
+// or forward/back slashes (e.g. "d:\Foo" vs "D:/Foo").
+function normalizeProject(p: string): string {
+  const withSlashes = p.replace(/\\/g, "/");
+  return /^[a-z]:/i.test(withSlashes)
+    ? withSlashes[0]!.toUpperCase() + withSlashes.slice(1)
+    : withSlashes;
+}
+
 function gitTotalLinesAdded(repoPath: string, since: string, until: string): number {
   try {
     const out = execSync(
       `git log --since="${since}" --until="${until}" --pretty=tformat: --numstat`,
-      { cwd: repoPath, encoding: "utf8" }
+      { cwd: repoPath, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
     );
     return out
       .trim()
@@ -64,21 +74,31 @@ function gitTotalLinesAdded(repoPath: string, since: string, until: string): num
 function report() {
   const events = loadEvents();
   const { start, end } = weekRange();
-  const projectFilter = process.argv[2]; // optional: filter by project path
+  const projectFilter = process.argv[2]
+    ? normalizeProject(process.argv[2]) // optional: filter by project path
+    : undefined;
 
   const week = events.filter((e) => {
     const t = new Date(e.ts);
     const inWeek = t >= start && t <= end;
-    const inProject = projectFilter ? e.project === projectFilter : true;
+    const inProject = projectFilter ? normalizeProject(e.project) === projectFilter : true;
     return inWeek && inProject;
   });
 
   const aiEvents = week.filter((e) => e.author === "ai");
   const aiLines = aiEvents.reduce((s, e) => s + e.lines, 0);
 
-  // For git line count, use current working directory or project filter
-  const repoPath = projectFilter ?? process.cwd();
-  const totalGitLines = gitTotalLinesAdded(repoPath, start.toISOString(), end.toISOString());
+  // Git baseline is computed per-project from the event log — not from cwd —
+  // so the report gives the same answer no matter where `mirror` is run.
+  const projects = projectFilter
+    ? [projectFilter]
+    : [...new Set(week.map((e) => normalizeProject(e.project)))];
+  const since = start.toISOString();
+  const until = end.toISOString();
+  const totalGitLines = projects.reduce(
+    (sum, repo) => sum + gitTotalLinesAdded(repo, since, until),
+    0
+  );
   const youLines = Math.max(0, totalGitLines - aiLines);
   const total = aiLines + youLines;
   const aiPct = total === 0 ? 0 : Math.round((aiLines / total) * 100);

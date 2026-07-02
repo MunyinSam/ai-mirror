@@ -68,6 +68,15 @@ if (!existsSync(envPath)) {
   console.log("✓ .env already exists");
 }
 
+// 7. Link the mirror CLI globally
+try {
+  const { execSync } = await import("child_process");
+  execSync("bun link", { cwd: REPO_ROOT, stdio: "inherit" });
+  console.log("✓ Linked `mirror` as a global command");
+} catch {
+  console.log("⚠ Could not run `bun link` — run it manually in the repo to enable the `mirror` command");
+}
+
 console.log("\nDone. Restart Claude Code for the hook to take effect.\n");
 console.log("Run the weekly report anytime with:");
-console.log("  bun run report\n");
+console.log("  mirror\n");
