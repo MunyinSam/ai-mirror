@@ -1,14 +1,14 @@
 {
   "name": "ai-mirror",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "bin": {
-    "mirror": "./report.ts"
+    "mirror": "./src/cli.ts"
   },
   "scripts": {
-    "setup": "bun run setup.ts",
-    "report": "bun run report.ts"
+    "setup": "bun run src/cli.ts setup",
+    "report": "bun run src/cli.ts report",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest"

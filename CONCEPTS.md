@@ -2,6 +2,9 @@
 
 > A document explaining every concept behind this project, written to be read cold.
 > If you forget *why* a decision was made, it's in here.
+>
+> Component status is marked throughout: ✅ built · 🚧 partial · 📋 planned.
+> The build order and decisions live in [PLAN.md](PLAN.md).
 
 ---
 
@@ -145,40 +148,40 @@ Everything orbits one **spine** plus a set of **gates**, fed by an **earn loop**
 
 ---
 
-## 5. The Skill Ledger
+## 5. The Skill Ledger  ✅ built
 
-A local file (`skills.json` or a small database). One entry per concept:
+A local file (`skills.json`). One entry per concept:
 
 ```jsonc
 {
-  "python-decorators": {
-    "understanding": 3,        // U: can explain it
-    "coding_level": 1,         // P: highest level you've PRODUCED unaided & verified
-    "rubric": {                // the per-concept ladder
-      "1": "apply an existing decorator",
-      "2": "write a basic decorator",
-      "3": "write a decorator factory",
-      "4": "stateful/class decorator + metadata"
-    },
-    "evidence": ["challenge:dec-factory-2026-07-02"],
-    "last_used": "2026-06-20",
-    "decay": { "understanding": 180, "coding": 45 }  // P decays faster (days)
+  "Python Decorators": {
+    "understanding": 2,          // U: mirrored from the vault's confidence frontmatter
+    "coding_level": 1,           // P: highest level you've PRODUCED unaided & verified
+    "last_produced": "2026-06-20",
+    "decay_days": { "u": 180, "p": 45 },   // P decays faster
+    "evidence": [
+      { "type": "produced", "ref": "commit:abc1234", "date": "2026-06-20" },
+      { "type": "claimed",  "ref": "manual",         "date": "2026-06-01" }
+    ]
   }
 }
 ```
 
 Key rules:
-- **Effective P = stored P decayed by time since you last produced it.** Knowing ≠ remembering; the ledger must not lie to you six months later.
+- **Effective P = stored P decayed by time since you last produced it** (one level per full decay window, computed at read time — stored values are never destroyed). Knowing ≠ remembering; the ledger must not lie to you six months later.
 - **The gate reads P.** U is supporting context.
 - **You can't *file* your way to a higher P — you have to *produce* your way there.** This is what stops you from stubbing a fake note to unlock the gate. It's stronger than a quiz: the unlock *is* writing the code.
+- **Evidence types are honest.** `produced` = provenance-verified hand-written code. `claimed` = a manual `mirror ledger set` attestation — allowed as an escape hatch, but always shown with a ⚠ and never counted as verified.
 
 The ledger is **seeded** from two sources:
-1. **Your Obsidian vault** → each concept note becomes a candidate at U = filed.
-2. **Your actual work + challenges** → produces P evidence.
+1. **Your Obsidian vault** → each concept note's `confidence:` (learning/solid/fluent) maps to U 1–3. The vault owns U; the ledger only mirrors it.
+2. **Your actual work** → committed code with no matching AI event is provably yours; it's classified and credited as `produced` evidence automatically (`mirror ledger sync`). This is a heuristic — the airtight version is v2's no-AI challenges.
+
+📋 *Deferred to v2:* per-concept L1–L4 rubric grading. Today the ledger tracks level *presence* (you produced this concept, and how recently); grading which rung you hit needs the challenge system.
 
 ---
 
-## 6. Provenance via Claude Code hooks
+## 6. Provenance via Claude Code hooks  ✅ built
 
 **Hooks** are commands Claude Code runs automatically when certain things happen. They are configured in `settings.json` and fire regardless of whether you use the terminal or the VS Code extension — because they fire on the **agent's tool calls**, not on the UI.
 
@@ -201,24 +204,28 @@ This is the write-time capture from §3.4, and it's the only trustworthy source 
 
 The system is **staged**. You build the cheapest, most informative thing first and earn the right to build the stricter things.
 
-### v1 — THE MIRROR (this folder)
+### v1 — THE MIRROR  ✅ built (this folder)
 A **passive observer**. It blocks nothing.
 
-It uses the `PostToolUse` hook to log, for every edit: *who wrote it (you/AI)*, *which concepts it used*, *when*. Then a CLI command prints a weekly report.
+The `PostToolUse` hook logs every AI edit **instantly and locally** — file, lines, a snippet, a content hash. Nothing else happens at write time. Classification, ledger math, and the report all run lazily when you ask for them.
 
-What a week looks like:
+What a week looks like (real output shape):
 
 ```
-AI Mirror — week of 2026-06-23 → 06-29
-──────────────────────────────────────
-Code shipped:        420 lines   (you: 95 · AI: 325  → 77% AI-written)
+AI Mirror — week of 2026-06-27 → 2026-07-04  [all projects]
+────────────────────────────────────────────────────────
+Code shipped:        2149 lines
+  you: 1714  ·  AI: 435  →  20% AI-written
+
 Concepts the AI handled for you:
-   ✓ within your skill:  7   (you could have written these — fine)
-   ⚠ beyond your skill:  5   (AI wrote, you've never produced unaided)
-        · python-decorator-factory   used 4×
-        · asyncio-gather             used 2×
-        · sqlalchemy-relationship    used 6×
-Days shipping only within your skill:  2 🔥
+   ✓ within your skill:   7
+   ⚠ beyond your skill:   3
+        · Claude Code Hooks                used 2×
+        · Tree-sitter                      used 1×
+        · Python async/await and the Event Loop used 1×
+
+Days shipping only within your skill: 1 🔥
+Past weeks: 06-20: 0% AI, 0 beyond  ·  06-13: 0% AI, 0 beyond
 ```
 
 That `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
@@ -230,14 +237,14 @@ That `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
 
 **What it deliberately does NOT do:** block commits, stop the AI, judge you in the moment, or withhold answers. Just honest measurement at near-zero friction.
 
-### v2 — THE TUTOR (prevention)
+### v2 — THE TUTOR  📋 planned (prevention)
 Moves the intervention *upstream* to generation time. Using `UserPromptSubmit` / `PreToolUse`, when you ask for code involving a concept **beyond your P**, the hook flips the AI into **tutor mode** — hints, pseudocode, a failing test — but **not** the finished answer. You never receive code you can't own in the first place.
 
 Built **only if** the Mirror shows you actually drifting. P is raised through an **explicit no-AI challenge** (write it in a sandbox, graded) — authorship certain by construction.
 
 > The "withhold answers, give hints" behavior itself is already commoditized (Claude's Learning Mode, OpenAI's Study Mode). Don't rebuild the tutor — *route to it*. Your originality is the **ledger + the gating**, not the tutoring.
 
-### v3 — THE GATE (backstop)
+### v3 — THE GATE  📋 planned (backstop)
 A git **pre-commit** hook — the universal net. It catches code from **any** source (including the Copilot/paste blind spot the Mirror can't see), because everything funnels through `git commit`. Ships **advisory-first** (it *tells* you) before it ever **blocks**, and **fails open** if unsure — so a misfiring classifier never feels arbitrary.
 
 **Principle: build the mirror first; earn the right to build the wall.**
@@ -256,47 +263,75 @@ This is the "StickK" part: the consequence isn't a wall, it's **a witness**.
 
 ---
 
-## 9. The classifier (how concepts get detected)
+## 9. The classifier (how concepts get detected)  ✅ built
 
-To say "this code uses decorators at L3," something must read the code. This is the hardest technical piece, and it's handled in **tiers** to stay fast, cheap, and trustworthy:
+To say "this code uses decorators," something must read the code. This is the hardest technical piece, and it's handled in **tiers** to stay fast, cheap, and trustworthy:
 
-1. **Cheap deterministic detectors first** — parse the code with **tree-sitter** and match patterns (a decorator that is itself a call returning a wrapper = a factory). Instant, free, deterministic. Handles most cases.
-2. **LLM only on the fuzzy residual** — the ambiguous level calls and brand-new concepts. Uses the Anthropic SDK with **structured output (a Zod schema)** so it returns reliable `{concept, level}` data, not free text.
-3. **Cache by content hash**; skip unchanged files.
+1. **Cheap deterministic detectors first** — parse the code with **tree-sitter** and match syntax patterns (decorators, async/await, comprehensions, generics…). Instant, free, deterministic. These become `tags`.
+2. **LLM for vault mapping, batched** — one call per ~15 snippets maps code + tags to **vault concept titles**, with structured output via a forced tool call (typed JSON, never parsed free text). Model: Haiku, pay-as-you-go — cents per month.
+3. **Cache by content hash** (`classify-cache.json`) — unchanged code is never re-sent. Entries classified before an API key existed are marked and backfilled once a key appears.
 
-Design rule: **keep the LLM out of the trust path where you can.** A non-deterministic classifier that misfires and blocks you on something you *do* know will destroy your trust in the tool — and a tool you don't trust gets disabled.
-
----
-
-## 10. Tech stack & shape
-
-- **Language: TypeScript / Node.** Native to the Claude Code ecosystem (CC, the agent SDK, and plugins are all TS). Tree-sitter in Node parses **both** Python and JS/TS, so concept-detection covers a full-stack codebase with one parser.
-- **Shape: a local-first toolkit — hook scripts + a CLI over a local `.skillgate/` folder.** No GUI, no server, no frontend. Closer to a `git` plugin than an app.
-- **No API token needed for v1** (the Mirror is pure local file I/O). A token is needed only for the LLM classifier, and only for its fuzzy cases — a separate Anthropic API key (not your Claude Code subscription), billed pay-as-you-go. Using a cheap model for classification costs **cents per month**.
-
-| Need | Library |
-|------|---------|
-| filesystem walk | `fast-glob` |
-| frontmatter parsing | `gray-matter` |
-| run git / shell | `node:child_process` / `execa` |
-| structured LLM output | `@anthropic-ai/sdk` + Zod |
-| concept AST | `web-tree-sitter` |
-| git hooks | `husky` |
-| datastore | `events.jsonl` / `better-sqlite3` |
-| CLI | `commander` |
+Two design rules, both load-bearing:
+- **Keep the LLM out of the trust path where you can.** A non-deterministic classifier that misfires and blocks you on something you *do* know will destroy your trust in the tool — and a tool you don't trust gets disabled.
+- **Keep the LLM out of the *hot* path entirely.** The classifier never runs in the hook. It runs when the report runs. Write-time stays local-only, key-optional, single-digit-milliseconds.
 
 ---
 
-## 11. Success metric
+## 10. Tech stack & shape  ✅ built
 
-Without a metric you can't tell if it's working. The two clean ones:
+- **Language: TypeScript on Bun.** Native to the Claude Code ecosystem. Tree-sitter parses **both** Python and JS/TS (the TypeScript grammar handles plain JS), so concept-detection covers a full-stack codebase with one parser.
+- **Shape: a local-first toolkit — one hook script + a `mirror` CLI over a data folder** (`~/.skillgate/data` by default, configurable in `mirror.config.json`). No GUI, no server, no frontend. Closer to a `git` plugin than an app.
+- **No API token needed for capture.** The hook is pure local file I/O. A token is needed only at *report time* for vault-concept mapping and style distillation — a separate Anthropic API key (not your Claude Code subscription), billed pay-as-you-go, **cents per month**.
+- **Storage is flat JSONL/JSON** — human-readable, git-diffable, hand-repairable, and schema-portable to Postgres for the future local setup (see `docs/pg-migration.md`).
 
-1. **Overrides trending toward zero** over time.
-2. **Can you finally rebuild a past vibe-coded project unaided** (the Discord bot). That's a pure test of P — the real-world pass/fail.
+| Need | How |
+|------|-----|
+| provenance log | `events.jsonl` (append-only, schema v2) |
+| classification cache | `classify-cache.json` keyed by content hash |
+| skill ledger | `skills.json` |
+| style corpus + profile | `style/samples.jsonl`, `style/profile.json`, `style/style-guide.md` |
+| concept AST | `web-tree-sitter` + `tree-sitter-typescript` / `tree-sitter-python` |
+| structured LLM output | `@anthropic-ai/sdk` forced tool calls (typed JSON) |
+| git interrogation | `node:child_process` → `git log -p -U0` |
+| CLI | hand-rolled dispatch in `src/cli.ts` (no framework needed) |
+| tests | `bun test` (`tests/`) |
 
 ---
 
-## 12. Glossary
+## 11. Measurement honesty  ✅ documented limits
+
+A tool about honest measurement must document its own error sources. These are known, accepted, and printed in the report footer:
+
+- **`you-lines = git lines added − AI lines` is an estimate.** AI rewrites of the same code double-count; AI edits not yet committed inflate AI% against the git baseline. Treat the ratio as a *trend*, not truth.
+- **Provenance blind spots:** code the agent writes via Bash heredocs or NotebookEdit, Copilot completions, and browser-chat pastes never fire the hook and count as "you." Acceptable for now; the v3 git gate is the universal net.
+- **P-inference is a heuristic.** "Committed code that matches no logged AI snippet" is only as good as hook coverage — code AI wrote *before* the Mirror existed (or outside it) can be miscredited as hand-written. The corpus and ledger get cleaner the longer the Mirror runs. The airtight version is v2's sandboxed challenges.
+- **Snippet matching is line-based.** Trivial lines (braces, blanks, short returns) are excluded from authorship matching; a hunk is AI-matched at ≥50% significant-line overlap.
+
+## 12. Concept identity  ✅ built
+
+One namespace rule keeps the whole system coherent: **`concepts` may only contain vault note titles, exactly as written in the note's `title:` frontmatter.** Raw tree-sitter output lives separately as `tags`. The LLM mapper is constrained to the vault list and anything outside it is discarded. No vault → no concepts (tags still work) — the system never invents a concept you haven't filed.
+
+## 13. The style profile  ✅ built
+
+The gate family answers *"could you have written this?"* The style profile answers a second question: *"does what the AI writes sound like you?"*
+
+Every provenance-verified hand-written hunk feeds `style/samples.jsonl` — an append-only corpus of how you actually code. `mirror style --rebuild` distills it (per language) into structured traits — naming, function shape, error handling, comment habits, idioms, notable absences — plus a human-readable `style-guide.md`. Reference that guide from your global `~/.claude/CLAUDE.md` and every Claude Code session writes code in *your* voice, not the model's default.
+
+Why it belongs here: once the gate says AI may write something (you've earned it), the output should still be code you'd naturally own. Capability gating plus style matching is what makes delegation indistinguishable from your own work — legitimately.
+
+📋 *Planned:* automatic injection via `UserPromptSubmit` (v2), and RAG/fine-tuning over the corpus on the local-LLM setup (see `docs/pg-migration.md`).
+
+## 14. Success metric
+
+Without a metric you can't tell if it's working:
+
+1. **v1 (the Mirror): week-over-week trend of AI% and beyond-skill concept count.** This is the number that answers "does merely *seeing* the gap change my behavior?" — and decides, with data, whether v2 gets built. The report prints it every week.
+2. **v2/v3: overrides trending toward zero** over time.
+3. **The end test: rebuild a past vibe-coded project unaided** (the Discord bot). That's a pure test of P — the real-world pass/fail.
+
+---
+
+## 15. Glossary
 
 | Term | Meaning |
 |------|---------|
@@ -312,7 +347,9 @@ Without a metric you can't tell if it's working. The two clean ones:
 | **Earn loop** | The way out of a block: learn it (U), then produce it (P). |
 | **Classifier** | Maps code → which concepts/levels it uses. Tiered: deterministic first, LLM for the rest. |
 | **Skill Ledger** | The local file storing U and P per concept. The spine. |
+| **Produced / claimed** | Evidence types. Produced = provenance-verified hand-written code. Claimed = manual attestation, always flagged ⚠. |
+| **Style profile** | Traits distilled from your verified hand-written code so allowed AI generation writes in your voice. |
 
 ---
 
-*This document is the conceptual reference for AI Mirror. The implementation starts at v1 (the Mirror): a `PostToolUse` hook that logs AI-vs-you events to `.skillgate/events.jsonl`, plus a CLI that prints the weekly report.*
+*This document is the conceptual reference for AI Mirror. The implementation is v1.5: a `PostToolUse` hook logging provenance events (`src/hook.ts`), a tiered cached classifier, the skill ledger, the style corpus, and the `mirror` CLI (`src/cli.ts` — report / classify / ledger / style / setup / migrate). See [PLAN.md](PLAN.md) for the build history and what comes next.*

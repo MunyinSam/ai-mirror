@@ -58,7 +58,7 @@ archive/              # pre-migration backups
 
 ## Phases
 
-### Phase 0 — Skeleton & migration  `[ ]`
+### Phase 0 — Skeleton & migration  `[x]`
 
 Restructure into a real package; migrate existing data. Nothing user-visible changes yet.
 
@@ -88,7 +88,7 @@ Restructure into a real package; migrate existing data. Nothing user-visible cha
 
 ---
 
-### Phase 1 — Provenance hook rewrite  `[ ]`
+### Phase 1 — Provenance hook rewrite  `[x]`
 
 The hook becomes what CONCEPTS.md always claimed it was: instant, local, dumb.
 
@@ -106,7 +106,7 @@ The hook becomes what CONCEPTS.md always claimed it was: instant, local, dumb.
 
 ---
 
-### Phase 2 — Classifier: report-time, tiered, cached  `[ ]`
+### Phase 2 — Classifier: report-time, tiered, cached  `[x]`
 
 The classifier CONCEPTS §9 describes, actually built.
 
@@ -125,7 +125,7 @@ The classifier CONCEPTS §9 describes, actually built.
 
 ---
 
-### Phase 3 — Skill ledger  `[ ]`
+### Phase 3 — Skill ledger  `[x]`
 
 The spine (CONCEPTS §5), with the honest-evidence rules decided above.
 
@@ -156,7 +156,7 @@ The spine (CONCEPTS §5), with the honest-evidence rules decided above.
 
 ---
 
-### Phase 4 — Style corpus & profile  `[ ]`  *(new requirement)*
+### Phase 4 — Style corpus & profile  `[x]`  *(new requirement)*
 
 Capture *how you write* from provenance-verified hand-written code, so that when AI
 generation is allowed, it produces code indistinguishable from your own hand.
@@ -181,7 +181,7 @@ generation is allowed, it produces code indistinguishable from your own hand.
 
 ---
 
-### Phase 5 — Report v2  `[ ]`
+### Phase 5 — Report v2  `[x]`
 
 The weekly mirror, now with the ledger behind it — the payoff screen.
 
@@ -203,7 +203,7 @@ The weekly mirror, now with the ledger behind it — the payoff screen.
 
 ---
 
-### Phase 6 — Docs rewrite  `[ ]`
+### Phase 6 — Docs rewrite  `[x]`
 
 Make CONCEPTS.md true again (its own stated purpose).
 

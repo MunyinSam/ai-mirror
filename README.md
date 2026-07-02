@@ -1,33 +1,38 @@
 # AI Mirror
 
-The Mirror is a passive recorder. It watches every code change you make in Claude Code, tags each one "you wrote this" vs "the AI wrote this", labels which concepts were involved, and once a week shows you a report of how much you're actually leaning on AI — and for which concepts. It blocks nothing. It just holds up a mirror.
+AI Mirror watches the code you write with AI, tells you honestly how much of it you couldn't have written yourself, and — over time — stops you from shipping code beyond your real skill, without ever banning AI.
+
+It blocks nothing (yet). It just holds up a mirror:
 
 ```
-AI Mirror — week of 2026-06-23 → 2026-06-29
-──────────────────────────────────────────────────
-Code shipped:        420 lines
-  you: 95  ·  AI: 325  →  77% AI-written
+AI Mirror — week of 2026-06-27 → 2026-07-04  [all projects]
+────────────────────────────────────────────────────────
+Code shipped:        2149 lines
+  you: 1714  ·  AI: 435  →  20% AI-written
 
 Concepts the AI handled for you:
-   · python-decorator-factory       4×
-   · asyncio-gather                 2×
-   · sqlalchemy-relationship        6×
+   ✓ within your skill:   7
+   ⚠ beyond your skill:   3
+        · Claude Code Hooks                used 2×
+        · Tree-sitter                      used 1×
+        · Python async/await and the Event Loop used 1×
 
-Files AI touched (3):
-   4×  /your/project/auth.py
-   6×  /your/project/models.py
-   2×  /your/project/tasks.py
+Days shipping only within your skill: 1 🔥
+Past weeks: 06-20: 0% AI, 0 beyond  ·  06-13: 0% AI, 0 beyond
 ```
+
+The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
+
+**Read [CONCEPTS.md](CONCEPTS.md) for the why. Read [PLAN.md](PLAN.md) for the build.**
 
 ---
 
 ## How it works
 
-- A `PostToolUse` hook fires every time Claude Code writes or edits a file
-- The hook logs the event to `data/events.jsonl` — file path, line count, timestamp, and which concepts the code uses (detected via tree-sitter + your Obsidian vault)
-- `bun run report` reads the log and your git history to produce the weekly breakdown
-
-Code you type yourself is never hooked — only Claude's tool calls are. That's the provenance signal.
+1. **Capture (instant, local):** a `PostToolUse` hook fires on every Claude Code Edit/Write and appends one line to `events.jsonl` — file, line count, snippet, content hash. No LLM, no network, no API key in the write path. Code you type yourself never fires the hook — that's the provenance signal.
+2. **Classify (lazy, cached):** when the report runs, tree-sitter tags each snippet deterministically, then a batched Haiku call maps snippets to concept titles from your Obsidian vault. Results are cached by content hash — unchanged code is never re-sent.
+3. **Ledger:** `skills.json` tracks per concept: **U** (understanding, mirrored from your vault's `confidence:` frontmatter) and **P** (coding ability — earned *only* by producing code). Committed code that matches no logged AI snippet is provably yours; `mirror ledger sync` classifies it and credits P automatically. P decays (45-day windows) — use it or lose it.
+4. **Style:** the same verified hand-written code feeds a style corpus; `mirror style --rebuild` distills how *you* write into a style guide you can reference from `~/.claude/CLAUDE.md`, so AI-generated code sounds like you.
 
 ---
 
@@ -35,83 +40,53 @@ Code you type yourself is never hooked — only Claude's tool calls are. That's 
 
 ### Requirements
 
-- [Bun](https://bun.sh) — `curl -fsSL https://bun.sh/install | bash`
-- [Claude Code](https://claude.ai/code) — the CLI or VS Code extension
-- An Anthropic API key (for vault-grounded concept detection — optional, falls back to syntax tags without it)
+- [Bun](https://bun.sh)
+- [Claude Code](https://claude.ai/code) — CLI or VS Code extension
+- An Anthropic API key (optional — enables vault concept mapping and style distillation; capture works without it)
 
 ### Steps
 
-**1. Clone into `~/.skillgate`**
-
 ```bash
-git clone https://github.com/MunyinSam/ai-mirror ~/.skillgate
-```
-
-> You can clone anywhere, but `~/.skillgate` keeps it out of your projects and makes the hook path consistent across machines.
-
-**2. Install dependencies**
-
-```bash
-cd ~/.skillgate
+git clone https://github.com/MunyinSam/ai-mirror
+cd ai-mirror
 bun install
+bun run setup        # wires the hook into ~/.claude/settings.json, links `mirror`
+echo "ANTHROPIC_API_KEY=sk-..." > .env   # optional
 ```
 
-**3. Run setup**
+Then **restart Claude Code** — hooks load on startup.
 
-```bash
-bun run setup
-```
-
-This wires the `PostToolUse` hook into `~/.claude/settings.json` and creates the `data/` directory. It's safe to run more than once.
-
-**4. Add your API key** *(optional — enables vault-grounded concept detection)*
-
-```bash
-echo "ANTHROPIC_API_KEY=your-key-here" > ~/.skillgate/.env
-```
-
-**5. Restart Claude Code**
-
-The hook only loads on startup. Restart the CLI or reload the VS Code window.
+Upgrading from the v1 log format? Run `mirror migrate` once.
 
 ---
 
 ## Usage
 
-**Weekly report** — run from anywhere:
+| Command | What it does |
+|---------|--------------|
+| `mirror` | weekly report (add a project path to filter, `--week 1` for last week, `--json` for scripts) |
+| `mirror classify` | classify uncached events now (otherwise happens at report time) |
+| `mirror ledger` | view U / stored P / effective (decayed) P per concept |
+| `mirror ledger sync` | scan recent commits for hand-written code → P evidence + style samples |
+| `mirror ledger set <concept> <1-4>` | manual claim — recorded as ⚠ claimed, never as verified |
+| `mirror style` | style corpus status |
+| `mirror style --rebuild` | distill your personal style profile + `style-guide.md` |
 
-```bash
-bun run ~/.skillgate/report.ts
-```
-
-Or filter to a specific project:
-
-```bash
-bun run ~/.skillgate/report.ts /path/to/your/project
-```
-
-**Add a convenience alias** to your shell:
-
-```bash
-# ~/.bashrc or ~/.zshrc
-alias mirror="bun run ~/.skillgate/report.ts"
-```
-
-Then just run `mirror` from anywhere.
+Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat JSONL/JSON — human-readable, git-diffable, and schema-ready for Postgres later (`docs/pg-migration.md`).
 
 ---
 
-## Vault-grounded concept detection
+## Honest limits
 
-If you use an [Obsidian](https://obsidian.md) vault with `~/.claude/vault-config.json` pointing at it, the Mirror reads your concept notes and asks Claude Haiku to map detected syntax patterns to concepts you've actually filed. This means the report shows concept names from *your* knowledge map, not generic tags.
-
-Without a vault or API key, concept detection falls back to structural syntax tags (`async_await`, `try_catch`, `decorator`, etc.) — still useful, just not personalised.
+- The you/AI line split is an estimate (AI rewrites double-count; uncommitted AI edits skew it). Trend, not truth.
+- The hook only sees Claude Code's Edit/Write tools — Copilot, browser paste, and Bash-written code count as "you" until the v3 git gate exists.
+- P-inference credits any committed code the Mirror didn't log — including AI code from before the Mirror existed. It gets cleaner the longer it runs.
 
 ---
 
 ## What's next
 
-This is v1 — the Mirror. It observes, never blocks.
+- **v2 — The Tutor:** flips Claude into hint mode at prompt time for concepts beyond your P, and adds no-AI challenges that verify P airtight.
+- **v3 — The Gate:** a git pre-commit backstop that catches AI code from any source. Advisory first, fails open.
 
-- **v2 — The Tutor:** intercepts prompts at generation time and flips Claude into hint mode for concepts beyond your skill level
-- **v3 — The Gate:** a git pre-commit hook that catches AI-written code from any source (including Copilot, browser paste) before it enters your history
+Build the mirror first; earn the right to build the wall.

@@ -28,6 +28,9 @@ export interface CacheEntry {
   tags: string[];
   /** vault note titles only (canonical concept namespace) */
   concepts: string[];
+  /** true once Tier 2 (LLM mapping) has run — entries cached without an API
+   *  key stay false and get backfilled when a key appears */
+  mapped: boolean;
   ts: string;
 }
 

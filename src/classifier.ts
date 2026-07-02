@@ -190,10 +190,15 @@ export async function classifyAll(
   const cache = loadCache(cachePath);
   const stats: ClassifyStats = { cached: 0, tagged: 0, llmMapped: 0, apiCalls: 0 };
 
-  // Dedupe by hash; skip legacy hashes (no code to classify) and cached ones.
+  const apiKey = process.env["ANTHROPIC_API_KEY"];
+
+  // Dedupe by hash; skip legacy hashes (no code to classify). Entries cached
+  // before an API key existed (mapped: false) are retried for Tier 2.
   const pending = new Map<string, ClassifyInput>();
   for (const input of inputs) {
-    if (cache[input.code_hash]) {
+    const cached = cache[input.code_hash];
+    const needsBackfill = cached && !cached.mapped && apiKey;
+    if (cached && !needsBackfill) {
       stats.cached++;
     } else if (input.snippet && !input.code_hash.startsWith("legacy:")) {
       pending.set(input.code_hash, input);
@@ -201,17 +206,19 @@ export async function classifyAll(
   }
   if (pending.size === 0) return { cache, stats };
 
-  // Tier 1 for everything pending
+  // Tier 1 for everything pending (reuse cached tags on backfill)
   const tagsByHash = new Map<string, string[]>();
   for (const item of pending.values()) {
-    tagsByHash.set(item.code_hash, await getSyntaxTags(item.snippet, item.lang));
+    const cachedTags = cache[item.code_hash]?.tags;
+    tagsByHash.set(item.code_hash, cachedTags ?? (await getSyntaxTags(item.snippet, item.lang)));
     stats.tagged++;
   }
 
   // Tier 2 only with a key and a vault
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
   const conceptsByHash = new Map<string, string[]>();
+  let tier2Ran = false;
   if (apiKey && vaultTitles.length > 0) {
+    tier2Ran = true;
     const client = new Anthropic({ apiKey });
     const items = [...pending.values()];
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
@@ -234,6 +241,7 @@ export async function classifyAll(
     const entry: CacheEntry = {
       tags: tagsByHash.get(item.code_hash) ?? [],
       concepts: conceptsByHash.get(item.code_hash) ?? [],
+      mapped: tier2Ran,
       ts: now,
     };
     cache[item.code_hash] = entry;

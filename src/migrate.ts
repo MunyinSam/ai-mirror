@@ -57,6 +57,7 @@ export function migrateRows(rows: unknown[]): MigrationResult {
     const entry: CacheEntry = {
       tags: old.filter((c) => V1_TAG_NAMES.has(c)),
       concepts: old.filter((c) => !V1_TAG_NAMES.has(c)),
+      mapped: true, // v1 classified at hook time; there is no code to redo it with
       ts: r.ts,
     };
     cacheSeed[hash] = entry;
