@@ -61,6 +61,7 @@ interface WeekStats {
   aiPct: number;
   conceptUse: Map<string, number>; // concept → AI usage count
   buckets: Record<SkillBucket, string[]>;
+  unfiledUse: Map<string, number>; // suggested concepts with no vault note
   aiFiles: Map<string, number>;
   cleanDays: number; // days with AI events, none beyond skill
 }
@@ -98,6 +99,7 @@ function computeWeek(
   const activeDays = new Set<string>();
   const aiFiles = new Map<string, number>();
 
+  const unfiledUse = new Map<string, number>();
   for (const e of aiEvents) {
     const day = e.ts.slice(0, 10);
     activeDays.add(day);
@@ -105,6 +107,9 @@ function computeWeek(
     for (const concept of cache[e.code_hash]?.concepts ?? []) {
       conceptUse.set(concept, (conceptUse.get(concept) ?? 0) + 1);
       if (bucketOf(ledger, concept) === "beyond") beyondDays.add(day);
+    }
+    for (const name of cache[e.code_hash]?.suggested ?? []) {
+      unfiledUse.set(name, (unfiledUse.get(name) ?? 0) + 1);
     }
   }
 
@@ -120,6 +125,7 @@ function computeWeek(
     aiPct: total === 0 ? 0 : Math.round((aiLines / total) * 100),
     conceptUse,
     buckets,
+    unfiledUse,
     aiFiles,
     cleanDays: activeDays.size - beyondDays.size,
   };
@@ -167,6 +173,7 @@ export async function reportCommand(args: string[]): Promise<void> {
           lines: { you: current.youLines, ai: current.aiLines, ai_pct: current.aiPct },
           concepts: Object.fromEntries(current.conceptUse),
           buckets: current.buckets,
+          unfiled: Object.fromEntries(current.unfiledUse),
           clean_days: current.cleanDays,
           trend: trend.map((w) => ({
             start: fmt(w.window.start),
@@ -202,6 +209,15 @@ export async function reportCommand(args: string[]): Promise<void> {
     }
   } else if (current.aiLines > 0) {
     console.log(`\n(no vault concepts mapped — add an ANTHROPIC_API_KEY and run \`mirror classify\`)`);
+  }
+
+  if (current.unfiledUse.size > 0) {
+    console.log(`\nUnfiled — AI used these, but your vault has no note (untracked):`);
+    const sorted = [...current.unfiledUse.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [name, n] of sorted.slice(0, 8)) {
+      console.log(`   ✚ ${name.padEnd(36)} ${n}×`);
+    }
+    console.log(`   → run \`mirror gaps\` or the /gaps skill to triage`);
   }
 
   console.log(`\nDays shipping only within your skill: ${current.cleanDays} 🔥`);

@@ -15,14 +15,35 @@ export async function ledgerCommand(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "set") return setCommand(args.slice(1));
   if (sub === "sync") return syncCommand(args.slice(1));
-  return listCommand(sub);
+  return listCommand(
+    args.includes("--json"),
+    args.find((a) => !a.startsWith("--"))
+  );
 }
 
-function listCommand(filter?: string): void {
+function listCommand(json: boolean, filter?: string): void {
   const paths = dataPaths();
   const ledger = loadLedger(paths.skills);
   syncUnderstanding(ledger, loadVaultConcepts());
   saveLedger(paths.skills, ledger);
+
+  if (json) {
+    const out = Object.fromEntries(
+      Object.entries(ledger.concepts).map(([name, entry]) => [
+        name,
+        {
+          understanding: entry.understanding,
+          coding_level: entry.coding_level,
+          effective_p: effectiveP(entry),
+          claimed_only: isClaimedOnly(entry),
+          last_produced: entry.last_produced,
+          decays_in_days: daysUntilDecay(entry),
+        },
+      ])
+    );
+    console.log(JSON.stringify(out, null, 2));
+    return;
+  }
 
   const entries = Object.entries(ledger.concepts)
     .filter(([name]) => !filter || name.toLowerCase().includes(filter.toLowerCase()))

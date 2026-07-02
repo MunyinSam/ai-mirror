@@ -22,7 +22,7 @@ export async function classifyCommand(): Promise<void> {
     console.log("   ⚠ no ANTHROPIC_API_KEY — Tier 2 vault mapping skipped (tags only)");
   }
   if (vault.length === 0) {
-    console.log("   ⚠ no vault configured — no canonical concept namespace to map into");
+    console.log("   ⚠ vault has no concept notes yet — everything maps to unfiled suggestions (`mirror gaps`)");
   }
   console.log();
 }

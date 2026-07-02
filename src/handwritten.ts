@@ -5,11 +5,8 @@
 // One pipeline, two consumers: surviving hunks become P evidence (via the
 // classifier) AND style-corpus samples.
 import { execSync } from "node:child_process";
-import type { MirrorEvent } from "./types.ts";
+import { CODE_LANGS, type MirrorEvent } from "./types.ts";
 import { langOf, normalizePath } from "./util.ts";
-
-/** Languages the classifier can parse — everything else is skipped. */
-const CODE_LANGS = new Set(["ts", "tsx", "js", "jsx", "py"]);
 
 /** Lines shorter than this after trimming (braces, blanks) carry no authorship
  *  signal and are excluded from matching. */

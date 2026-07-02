@@ -10,6 +10,7 @@ Usage: mirror <command> [options]
 Commands:
   report [project] [--week N] [--json]   weekly report (default command)
   classify                               classify uncached events (tags + vault concepts)
+  gaps [--days N] [--json]               unfiled / beyond-skill / decaying concepts
   ledger [filter]                        view the skill ledger
   ledger sync [--days N] [--repo path]   infer P + style samples from hand-written commits
   ledger set <concept> <level>           manual claim (recorded as ⚠ claimed, not produced)
@@ -32,6 +33,11 @@ switch (cmd) {
   case "classify": {
     const { classifyCommand } = await import("./commands/classify.ts");
     await classifyCommand();
+    break;
+  }
+  case "gaps": {
+    const { gapsCommand } = await import("./commands/gaps.ts");
+    await gapsCommand(rest);
     break;
   }
   case "ledger": {

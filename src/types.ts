@@ -22,6 +22,10 @@ export interface MirrorEvent {
 
 export const SNIPPET_CAP = 8 * 1024;
 
+/** Languages the classifier understands. Everything else (markdown, JSON,
+ *  configs) is provenance-logged but never concept-classified. */
+export const CODE_LANGS = new Set(["ts", "tsx", "js", "jsx", "py"]);
+
 /** Classification result for one code_hash. Tier 1 = tags, Tier 2 = concepts. */
 export interface CacheEntry {
   /** deterministic tree-sitter syntax tags */
@@ -31,6 +35,9 @@ export interface CacheEntry {
   /** true once Tier 2 (LLM mapping) has run — entries cached without an API
    *  key stay false and get backfilled when a key appears */
   mapped: boolean;
+  /** concept names the mapper wanted but that aren't in the vault — the raw
+   *  material for `mirror gaps` (never mixed into concepts[]) */
+  suggested?: string[];
   ts: string;
 }
 

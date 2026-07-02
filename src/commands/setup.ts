@@ -7,14 +7,38 @@ const HOME = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "~";
 const SETTINGS_PATH = resolve(HOME, ".claude/settings.json");
 const HOOK_CMD = `bun run ${REPO_ROOT}/src/hook.ts`;
 
+// One shared interface — a fresh one per question drops buffered piped input,
+// and a closed stdin (Ctrl+D / piped defaults) must resolve with the default,
+// not hang or throw on the next question.
+let rl: readline.Interface | null = null;
+let stdinClosed = false;
+
 function ask(question: string, defaultVal: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((res) => {
-    rl.question(`${question} [${defaultVal}]: `, (answer) => {
-      rl.close();
-      res(answer.trim() || defaultVal);
+  if (stdinClosed) {
+    console.log(`${question} [${defaultVal}]: (default)`);
+    return Promise.resolve(defaultVal);
+  }
+  if (!rl) {
+    rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.once("close", () => {
+      stdinClosed = true;
     });
+  }
+  return new Promise((res) => {
+    let answered = false;
+    const done = (answer: string) => {
+      if (answered) return;
+      answered = true;
+      res(answer.trim() || defaultVal);
+    };
+    rl!.question(`${question} [${defaultVal}]: `, done);
+    rl!.once("close", () => done(""));
   });
+}
+
+function closePrompts(): void {
+  rl?.close();
+  rl = null;
 }
 
 interface HookEntry {
@@ -77,7 +101,44 @@ export async function setupCommand(): Promise<void> {
     console.log("✓ .env already exists");
   }
 
-  // 4. Global `mirror` command
+  // 4. Companion skills (/gaps, /drill, /mirror-week)
+  const installSkills = await ask(
+    "Install the companion skills (/gaps, /drill, /mirror-week)? (y/n)",
+    "y"
+  );
+  if (installSkills.toLowerCase().startsWith("y")) {
+    const skillsSrc = resolve(REPO_ROOT, "skills");
+    const skillsDst = resolve(HOME, ".claude/skills");
+    for (const name of ["gaps", "drill", "mirror-week"]) {
+      const src = resolve(skillsSrc, name, "SKILL.md");
+      if (!existsSync(src)) continue;
+      mkdirSync(resolve(skillsDst, name), { recursive: true });
+      writeFileSync(resolve(skillsDst, name, "SKILL.md"), readFileSync(src, "utf8"), "utf8");
+      console.log(`✓ Installed skill: /${name}`);
+    }
+  }
+
+  // 5. Observe-only policy block in the global CLAUDE.md (idempotent by marker)
+  const addPolicy = await ask(
+    "Add the observe-only AI Mirror policy to ~/.claude/CLAUDE.md? (y/n)",
+    "y"
+  );
+  if (addPolicy.toLowerCase().startsWith("y")) {
+    const policyPath = resolve(REPO_ROOT, "skills/claude-md-policy.md");
+    const claudeMdPath = resolve(HOME, ".claude/CLAUDE.md");
+    const existing = existsSync(claudeMdPath) ? readFileSync(claudeMdPath, "utf8") : "";
+    if (existing.includes("# AI Mirror policy")) {
+      console.log("✓ CLAUDE.md already has the AI Mirror policy — left as is");
+    } else {
+      const policy = readFileSync(policyPath, "utf8");
+      writeFileSync(claudeMdPath, existing ? `${existing.trimEnd()}\n\n${policy}` : policy, "utf8");
+      console.log("✓ Appended AI Mirror policy to ~/.claude/CLAUDE.md");
+    }
+  }
+
+  closePrompts();
+
+  // 6. Global `mirror` command
   try {
     const { execSync } = await import("node:child_process");
     execSync("bun link", { cwd: REPO_ROOT, stdio: "inherit" });
@@ -86,6 +147,6 @@ export async function setupCommand(): Promise<void> {
     console.log("⚠ Could not run `bun link` — run it manually in the repo");
   }
 
-  console.log("\nDone. Restart Claude Code for the hook to take effect.");
-  console.log("Run `mirror` anytime for the weekly report.\n");
+  console.log("\nDone. Restart Claude Code for the hook and skills to take effect.");
+  console.log("Run `mirror` anytime for the weekly report, `mirror gaps` to see what to learn.\n");
 }

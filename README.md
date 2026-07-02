@@ -50,11 +50,13 @@ The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
 git clone https://github.com/MunyinSam/ai-mirror
 cd ai-mirror
 bun install
-bun run setup        # wires the hook into ~/.claude/settings.json, links `mirror`
+bun run setup
 echo "ANTHROPIC_API_KEY=sk-..." > .env   # optional
 ```
 
-Then **restart Claude Code** — hooks load on startup.
+Setup wires the hook into `~/.claude/settings.json`, links the `mirror` command, and offers two opt-ins: installing the companion skills (**/gaps** — triage what the mirror found, **/drill** — 10-minute learn-and-earn, **/mirror-week** — the Friday ritual) and adding the observe-only policy block to your global `~/.claude/CLAUDE.md`.
+
+Then **restart Claude Code** — hooks and skills load on startup.
 
 Upgrading from the v1 log format? Run `mirror migrate` once.
 

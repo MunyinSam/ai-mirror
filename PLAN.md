@@ -232,3 +232,76 @@ the hand-written-code pipeline. 5 needs everything. 6 last so the doc describes 
 - v3 git pre-commit gate
 - Postgres / Mac mini deployment (schema-ready only)
 - Full L1–L4 rubric grading of P (needs v2 challenges to verify levels)
+
+---
+
+# Stage 2 — Vault & skills layer
+
+> Decided 2026-07-02. The mirror only tracks concepts that exist in the vault —
+> anything unfiled is silently dropped. Stage 2 makes the vault grow *along* the
+> mirror's findings, and makes learning fast enough that filing never feels like a tax.
+
+## Decisions locked in
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Vault | **Fresh vault, new folder, repoint `vault-config.json`** | Old vault (`D:\ObsidianVault`) stays untouched as a readable archive. Reversible in one config line. |
+| Migration | **On demand** | New vault starts empty. When a mirror gap matches an old note, `/gaps` offers to import + upgrade it. Nothing hollow carries over. |
+| Population | **Demand-driven from mirror gaps** | The report + `/gaps` surface concepts the AI used that have no vault note. You file what you actually encounter — the vault grows exactly along your real work. |
+| Note template | **Minimal frontmatter + optional body sections** | `title, confidence, status, domain, parent` — exactly what the mirror and skills read. Body (why/how/example/gotchas) optional. Friction kills. |
+| Enforcement | **Observe only (v1 spirit)** | Gaps are named and routed to learning; nothing ever refuses to generate. The wall stays unearned. |
+| Fast learning | **`/drill`: calibrate → explain → hand-type → file** | Fixes "/learn takes 30 min for a 10-min concept." Starts by asking what you already know (never assumes prior knowledge), explains directly at that level, ends with ONE micro-exercise you hand-type in a real file — which the provenance layer credits as P on your next `ledger sync`. Raises U and P in one ~10-minute sitting. |
+
+## Phases
+
+### Phase V0 — Fresh vault scaffold  `[x]`
+
+- New folder (default `D:\ObsidianVault-v2`, name confirmed at build time):
+  `concepts/` (domain subfolders grown on demand), `templates/concept.md`, root MOC.
+- Template frontmatter: `title, aliases, type: concept, parent, domain, status, confidence`.
+- Repoint `~/.claude/vault-config.json`; old vault untouched.
+- **Done when:** `mirror ledger` shows an empty-but-valid vault; a hand-filed test note appears in the ledger on next run.
+
+### Phase V1 — Gap detection (code, this repo)  `[x]`
+
+- Classifier: the LLM mapper also returns concept names it *wanted* to use but
+  aren't in the vault → stored as `suggested[]` in the cache entry (namespace rule
+  untouched: `concepts[]` stays vault-only).
+- Report: new "unfiled concepts the AI used" section (counts + names).
+- New `mirror gaps [--json]` subcommand: unfiled suggestions + beyond-skill usage +
+  decaying P, machine-readable — the data source for the `/gaps` skill.
+- **Done when:** code using an unfiled concept shows up in `mirror gaps` with a suggested name.
+
+### Phase V2 — Skills  `[x]`
+
+All new skills live in `~/.claude/skills/`; they read `mirror gaps --json` / `skills.json`.
+
+- **`/gaps`** — the bridge. Shows unfiled / beyond-P / decaying concepts; for each, routes:
+  file it (`/add-new-concepts`), learn it fast (`/drill`), deep-dive (`/learn`), or
+  import + upgrade the matching note from the old vault (on-demand migration).
+- **`/drill`** — the fast earn loop: ①calibrate ("what do you already know about X?" — one question,
+  30s), ②explain directly at that level (no Socratic drip), ③one micro-exercise hand-typed
+  into a real project file, ④auto-file the note (`confidence: learning`), ⑤remind to commit
+  so `ledger sync` credits P.
+- **`/generate` upgrade** — ledger-aware: before writing code, check effective P in
+  `skills.json`; name any beyond-P/unfiled concepts in the response (observe-only, never refuses).
+- **`/mirror-week`** — the Friday ritual: `mirror report` → `/gaps` triage → `/review` for
+  decaying concepts → suggest `mirror style --rebuild` if the corpus grew.
+
+### Phase V3 — CLAUDE.md policy  `[x]`
+
+- Global `~/.claude/CLAUDE.md` block: after generating code, name concepts likely
+  beyond-P or unfiled and point at `/drill` — one line, observational, never blocks.
+- Reference the style guide (`style/style-guide.md`) once it exists.
+
+### Phase V4 — On-demand migration polish  `[x]`
+
+- `/gaps` import flow: find old-vault note by title/alias fuzzy match, convert to the
+  new template, keep original `confidence:` only if the user confirms it still holds
+  (otherwise reset to `learning`).
+- **Done when:** an old note can be pulled into the new vault in <1 minute without hand-editing.
+
+## Order rationale
+
+V0 before V1 (gap detection needs a vault to diff against). V1 before V2 (`/gaps` consumes
+`mirror gaps --json`). V3 anytime after V2. V4 is folded into `/gaps` but polished last.

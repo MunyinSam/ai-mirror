@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 import { Language, Parser, Query } from "web-tree-sitter";
 import Anthropic from "@anthropic-ai/sdk";
 import { REPO_ROOT } from "./config.ts";
-import type { CacheEntry, ClassifyCache } from "./types.ts";
+import { CODE_LANGS, type CacheEntry, type ClassifyCache } from "./types.ts";
 
 const WASM_DIR = resolve(REPO_ROOT, "node_modules");
 
@@ -112,7 +112,7 @@ async function mapBatchToVaultConcepts(
   batch: ClassifyInput[],
   tagsByHash: Map<string, string[]>,
   vaultTitles: string[]
-): Promise<Map<string, string[]>> {
+): Promise<Map<string, { concepts: string[]; suggested: string[] }>> {
   const numbered = batch
     .map(
       (item, i) =>
@@ -140,6 +140,12 @@ async function mapBatchToVaultConcepts(
                 properties: {
                   index: { type: "integer" },
                   concepts: { type: "array", items: { type: "string" } },
+                  unfiled: {
+                    type: "array",
+                    items: { type: "string" },
+                    description:
+                      "short canonical names of concepts the snippet clearly uses that are NOT in the vault list",
+                  },
                 },
                 required: ["index", "concepts"],
               },
@@ -155,8 +161,10 @@ async function mapBatchToVaultConcepts(
         role: "user",
         content: `For each numbered code snippet below, list which of these vault concepts it uses or requires understanding of. Use the concept titles EXACTLY as written. Use an empty list when none apply — do not stretch.
 
+Additionally: if a snippet clearly rests on a significant concept that is NOT in the vault list, name it in "unfiled" (short canonical name, e.g. "Python Decorator Factory"). At most the 2 most significant per snippet. Only concepts worth a study session — patterns, techniques, architectures. NEVER language basics or single built-ins (string interpolation, imports, Object.fromEntries, type annotations, etc.).
+
 Vault concepts:
-${vaultTitles.join(", ")}
+${vaultTitles.length > 0 ? vaultTitles.join(", ") : "(vault is empty — everything significant goes in unfiled)"}
 
 ${numbered}`,
       },
@@ -166,16 +174,22 @@ ${numbered}`,
   const block = response.content.find((b) => b.type === "tool_use");
   const results =
     (block?.type === "tool_use"
-      ? (block.input as { results?: { index: number; concepts: string[] }[] }).results
+      ? (block.input as {
+          results?: { index: number; concepts: string[]; unfiled?: string[] }[];
+        }).results
       : undefined) ?? [];
 
   const titleSet = new Set(vaultTitles);
-  const out = new Map<string, string[]>();
+  const out = new Map<string, { concepts: string[]; suggested: string[] }>();
   for (const r of results) {
     const item = batch[r.index];
     if (!item) continue;
-    // Enforce the canonical namespace: only exact vault titles survive.
-    out.set(item.code_hash, [...new Set(r.concepts.filter((c) => titleSet.has(c)))]);
+    out.set(item.code_hash, {
+      // Enforce the canonical namespace: only exact vault titles survive.
+      concepts: [...new Set(r.concepts.filter((c) => titleSet.has(c)))],
+      // Anything the mapper reached for outside the vault is a gap candidate.
+      suggested: [...new Set((r.unfiled ?? []).filter((c) => !titleSet.has(c)))],
+    });
   }
   return out;
 }
@@ -195,11 +209,16 @@ export async function classifyAll(
   // Dedupe by hash; skip legacy hashes (no code to classify). Entries cached
   // before an API key existed (mapped: false) are retried for Tier 2.
   const pending = new Map<string, ClassifyInput>();
+  const now0 = new Date().toISOString();
   for (const input of inputs) {
     const cached = cache[input.code_hash];
     const needsBackfill = cached && !cached.mapped && apiKey;
     if (cached && !needsBackfill) {
       stats.cached++;
+    } else if (!CODE_LANGS.has(input.lang)) {
+      // Docs/configs are provenance-logged but never concept-classified;
+      // cache a terminal empty entry so they don't churn every run.
+      cache[input.code_hash] = { tags: [], concepts: [], mapped: true, suggested: [], ts: now0 };
     } else if (input.snippet && !input.code_hash.startsWith("legacy:")) {
       pending.set(input.code_hash, input);
     }
@@ -214,10 +233,11 @@ export async function classifyAll(
     stats.tagged++;
   }
 
-  // Tier 2 only with a key and a vault
-  const conceptsByHash = new Map<string, string[]>();
+  // Tier 2 with a key — even against an empty vault, so unfiled suggestions
+  // still flow (that's how a fresh vault learns what it's missing).
+  const mappedByHash = new Map<string, { concepts: string[]; suggested: string[] }>();
   let tier2Ran = false;
-  if (apiKey && vaultTitles.length > 0) {
+  if (apiKey) {
     tier2Ran = true;
     const client = new Anthropic({ apiKey });
     const items = [...pending.values()];
@@ -225,7 +245,7 @@ export async function classifyAll(
       const batch = items.slice(i, i + BATCH_SIZE);
       try {
         const mapped = await mapBatchToVaultConcepts(client, batch, tagsByHash, vaultTitles);
-        for (const [hash, concepts] of mapped) conceptsByHash.set(hash, concepts);
+        for (const [hash, result] of mapped) mappedByHash.set(hash, result);
         stats.apiCalls++;
         stats.llmMapped += mapped.size;
       } catch (err) {
@@ -238,10 +258,12 @@ export async function classifyAll(
 
   const now = new Date().toISOString();
   for (const item of pending.values()) {
+    const mapped = mappedByHash.get(item.code_hash);
     const entry: CacheEntry = {
       tags: tagsByHash.get(item.code_hash) ?? [],
-      concepts: conceptsByHash.get(item.code_hash) ?? [],
+      concepts: mapped?.concepts ?? [],
       mapped: tier2Ran,
+      suggested: mapped?.suggested ?? [],
       ts: now,
     };
     cache[item.code_hash] = entry;
