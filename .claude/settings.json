@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "PowerShell(bun run src/cli.ts report)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(git add *)",
+      "Bash(bun -e ' *)",
+      "Bash(git config *)",
+      "Bash(bun -e 'const g = new Bun.Glob\\(\"D:/ObsidianVault-v2/concepts/**/*.md\"\\); console.log\\([...g.scanSync\\(\\)].length, \"files via glob\"\\)')"
     ]
   }
 }
