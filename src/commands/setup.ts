@@ -6,6 +6,7 @@ import { CONFIG_FILE, REPO_ROOT } from "../config.ts";
 const HOME = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "~";
 const SETTINGS_PATH = resolve(HOME, ".claude/settings.json");
 const HOOK_CMD = `bun run ${REPO_ROOT}/src/hook.ts`;
+const PROMPT_HOOK_CMD = `bun run ${REPO_ROOT}/src/prompt-hook.ts`;
 
 // One shared interface — a fresh one per question drops buffered piped input,
 // and a closed stdin (Ctrl+D / piped defaults) must resolve with the default,
@@ -97,22 +98,22 @@ interface HookEntry {
   hooks?: { type: string; command: string }[];
 }
 
-/** Replace our PostToolUse entry without clobbering any other hooks the user
- *  has configured. Ours is identified by the repo path in the command. */
+/** Replace our entry for one hook event without clobbering any other hooks
+ *  the user has configured. Ours is identified by the repo path in the command. */
 export function mergeHookSettings(
   settings: Record<string, unknown>,
-  hookCmd: string
+  event: string,
+  hookCmd: string,
+  matcher?: string
 ): Record<string, unknown> {
   const hooks = (settings["hooks"] ?? {}) as Record<string, unknown>;
-  const existing = Array.isArray(hooks["PostToolUse"])
-    ? (hooks["PostToolUse"] as HookEntry[])
-    : [];
+  const existing = Array.isArray(hooks[event]) ? (hooks[event] as HookEntry[]) : [];
   const others = existing.filter(
     (e) => !(e.hooks ?? []).some((h) => h.command.includes("ai-mirror"))
   );
-  hooks["PostToolUse"] = [
+  hooks[event] = [
     ...others,
-    { matcher: "Edit|Write", hooks: [{ type: "command", command: hookCmd }] },
+    { ...(matcher ? { matcher } : {}), hooks: [{ type: "command", command: hookCmd }] },
   ];
   settings["hooks"] = hooks;
   return settings;
@@ -139,9 +140,11 @@ export async function setupCommand(): Promise<void> {
       console.log("⚠ Could not parse ~/.claude/settings.json — starting fresh");
     }
   }
-  settings = mergeHookSettings(settings, HOOK_CMD);
+  settings = mergeHookSettings(settings, "PostToolUse", HOOK_CMD, "Edit|Write");
+  settings = mergeHookSettings(settings, "UserPromptSubmit", PROMPT_HOOK_CMD);
   writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf8");
   console.log(`✓ Wired PostToolUse hook → ${HOOK_CMD}`);
+  console.log(`✓ Wired UserPromptSubmit tutor hook → ${PROMPT_HOOK_CMD}`);
 
   // 3. .env for the report-time classifier (the hook itself never needs a key)
   const envPath = resolve(REPO_ROOT, ".env");
@@ -185,6 +188,13 @@ export async function setupCommand(): Promise<void> {
   }
 
   // 5. Companion skills (/gaps, /drill, /mirror-week)
+  // Bundled files use {{MIRROR_REPO}} / {{STYLE_GUIDE}} placeholders so each
+  // machine's install points at its own clone — never a synced foreign path.
+  const substitute = (text: string): string =>
+    text
+      .replaceAll("{{MIRROR_REPO}}", REPO_ROOT.replace(/\\/g, "/"))
+      .replaceAll("{{STYLE_GUIDE}}", resolve(dataDir, "style/style-guide.md").replace(/\\/g, "/"));
+
   const installSkills = await ask(
     "Install the companion skills (/gaps, /drill, /mirror-week)? (y/n)",
     "y"
@@ -196,25 +206,35 @@ export async function setupCommand(): Promise<void> {
       const src = resolve(skillsSrc, name, "SKILL.md");
       if (!existsSync(src)) continue;
       mkdirSync(resolve(skillsDst, name), { recursive: true });
-      writeFileSync(resolve(skillsDst, name, "SKILL.md"), readFileSync(src, "utf8"), "utf8");
+      writeFileSync(resolve(skillsDst, name, "SKILL.md"), substitute(readFileSync(src, "utf8")), "utf8");
       console.log(`✓ Installed skill: /${name}`);
     }
   }
 
-  // 6. Observe-only policy block in the global CLAUDE.md (idempotent by marker)
+  // 6. Observe-only policy block in the global CLAUDE.md. Idempotent by
+  // marker, but REPLACES an existing section — a synced CLAUDE.md from
+  // another machine carries that machine's paths and must be refreshed.
   const addPolicy = await ask(
-    "Add the observe-only AI Mirror policy to ~/.claude/CLAUDE.md? (y/n)",
+    "Add the AI Mirror policy (tutor-first, never refuse) to ~/.claude/CLAUDE.md? (y/n)",
     "y"
   );
   if (addPolicy.toLowerCase().startsWith("y")) {
     const policyPath = resolve(REPO_ROOT, "skills/claude-md-policy.md");
     const claudeMdPath = resolve(HOME, ".claude/CLAUDE.md");
     const existing = existsSync(claudeMdPath) ? readFileSync(claudeMdPath, "utf8") : "";
-    if (existing.includes("# AI Mirror policy")) {
-      console.log("✓ CLAUDE.md already has the AI Mirror policy — left as is");
+    const policy = substitute(readFileSync(policyPath, "utf8")).trimEnd();
+    const marker = "# AI Mirror policy";
+    if (existing.includes(marker)) {
+      // Replace from the marker heading to the next top-level heading (or EOF).
+      const start = existing.indexOf(marker);
+      const rest = existing.slice(start + marker.length);
+      const nextHeading = rest.search(/^# /m);
+      const end = nextHeading === -1 ? existing.length : start + marker.length + nextHeading;
+      const updated = existing.slice(0, start) + policy + "\n\n" + existing.slice(end);
+      writeFileSync(claudeMdPath, updated.replace(/\n{3,}/g, "\n\n"), "utf8");
+      console.log("✓ Refreshed AI Mirror policy in ~/.claude/CLAUDE.md (paths updated)");
     } else {
-      const policy = readFileSync(policyPath, "utf8");
-      writeFileSync(claudeMdPath, existing ? `${existing.trimEnd()}\n\n${policy}` : policy, "utf8");
+      writeFileSync(claudeMdPath, existing ? `${existing.trimEnd()}\n\n${policy}\n` : `${policy}\n`, "utf8");
       console.log("✓ Appended AI Mirror policy to ~/.claude/CLAUDE.md");
     }
   }

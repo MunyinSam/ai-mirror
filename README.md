@@ -32,7 +32,8 @@ The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
 1. **Capture (instant, local):** a `PostToolUse` hook fires on every Claude Code Edit/Write and appends one line to `events.jsonl` — file, line count, snippet, content hash. No LLM, no network, no API key in the write path. Code you type yourself never fires the hook — that's the provenance signal.
 2. **Classify (lazy, cached):** when the report runs, tree-sitter tags each snippet deterministically, then a batched Haiku call maps snippets to concept titles from your Obsidian vault. Results are cached by content hash — unchanged code is never re-sent.
 3. **Ledger:** `skills.json` tracks per concept: **U** (understanding, mirrored from your vault's `confidence:` frontmatter) and **P** (coding ability — earned *only* by producing code). Committed code that matches no logged AI snippet is provably yours; `mirror ledger sync` classifies it and credits P automatically. P decays (45-day windows) — use it or lose it.
-4. **Style:** the same verified hand-written code feeds a style corpus; `mirror style --rebuild` distills how *you* write into a style guide you can reference from `~/.claude/CLAUDE.md`, so AI-generated code sounds like you.
+4. **Style:** the same verified hand-written code feeds a style corpus; `mirror style --rebuild` distills how *you* write into a style guide plus a compact digest, so AI-generated code sounds like you.
+5. **Tutor (prompt time, v2):** a `UserPromptSubmit` hook matches each code prompt against the ledger — locally, instantly — and injects tutor-mode instructions for unearned concepts plus your style digest. Explicit requests always get full code; the override is logged, and `mirror challenge` is the verified way back up.
 
 ---
 
@@ -72,7 +73,10 @@ Upgrading from the v1 log format? Run `mirror migrate` once.
 | `mirror ledger sync` | scan recent commits for hand-written code → P evidence + style samples |
 | `mirror ledger set <concept> <1-4>` | manual claim — recorded as ⚠ claimed, never as verified |
 | `mirror style` | style corpus status |
-| `mirror style --rebuild` | distill your personal style profile + `style-guide.md` |
+| `mirror style --rebuild` | distill your personal style profile + `style-guide.md` + prompt digest |
+| `mirror challenge <concept>` | generate a no-AI challenge sandbox; hand-type the solution to earn verified P (the only path to L2–L4) |
+| `mirror challenge grade` | provenance-check the sandbox (AI edits void it), then LLM-grade against the rubric |
+| `mirror override <concept>` | log that you shipped code beyond your P — witnessed, never blocked |
 
 Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat JSONL/JSON — human-readable, git-diffable, and schema-ready for Postgres later (`docs/pg-migration.md`).
 
@@ -87,9 +91,12 @@ Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat
 
 ---
 
+## The tutor (v2) — built
+
+A `UserPromptSubmit` hook (wired by setup) checks every code-intent prompt against the ledger — locally, no API call. Mention a concept whose P is unearned, decayed, or claimed-only, and the session defaults to **tutor mode**: hints, pseudocode, a failing test. Ask explicitly for the full code and you get it — plus a logged override the weekly report counts. The same hook injects your style digest so generated code reads like yours.
+
 ## What's next
 
-- **v2 — The Tutor:** flips Claude into hint mode at prompt time for concepts beyond your P, and adds no-AI challenges that verify P airtight.
-- **v3 — The Gate:** a git pre-commit backstop that catches AI code from any source. Advisory first, fails open.
+- **v3 — The Gate:** a git pre-commit backstop that catches AI code from any source (Copilot, browser paste). Advisory first, fails open. Built only when the mirror's data says it's needed.
 
 Build the mirror first; earn the right to build the wall.

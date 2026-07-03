@@ -99,7 +99,8 @@ async function distillLang(
 export async function rebuildProfile(
   samplesPath: string,
   profilePath: string,
-  guidePath: string
+  guidePath: string,
+  digestPath?: string
 ): Promise<StyleProfile> {
   const apiKey = process.env["ANTHROPIC_API_KEY"];
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY required to rebuild the style profile");
@@ -121,7 +122,18 @@ export async function rebuildProfile(
   mkdirSync(dirname(profilePath), { recursive: true });
   writeFileSync(profilePath, JSON.stringify(profile, null, 2), "utf8");
   writeFileSync(guidePath, renderGuide(profile, samples.length), "utf8");
+  if (digestPath) writeFileSync(digestPath, renderDigest(profile), "utf8");
   return profile;
+}
+
+/** Compact (≤ ~600 chars) per-language digest, injected into code-intent
+ *  prompts by the UserPromptSubmit hook. */
+export function renderDigest(profile: StyleProfile): string {
+  const lines: string[] = [];
+  for (const [lang, t] of Object.entries(profile)) {
+    lines.push(`${lang}: ${t.naming} ${t.functions} Errors: ${t.error_handling}`.slice(0, 200));
+  }
+  return lines.join("\n").slice(0, 600) + "\n";
 }
 
 /** Deterministic markdown render of the profile — meant to be referenced from

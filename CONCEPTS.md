@@ -237,12 +237,15 @@ That `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
 
 **What it deliberately does NOT do:** block commits, stop the AI, judge you in the moment, or withhold answers. Just honest measurement at near-zero friction.
 
-### v2 — THE TUTOR  📋 planned (prevention)
-Moves the intervention *upstream* to generation time. Using `UserPromptSubmit` / `PreToolUse`, when you ask for code involving a concept **beyond your P**, the hook flips the AI into **tutor mode** — hints, pseudocode, a failing test — but **not** the finished answer. You never receive code you can't own in the first place.
+### v2 — THE TUTOR  ✅ built (prevention)
+Moves the intervention *upstream* to generation time — without ever blocking:
 
-Built **only if** the Mirror shows you actually drifting. P is raised through an **explicit no-AI challenge** (write it in a sandbox, graded) — authorship certain by construction.
+- **`UserPromptSubmit` hook** (`src/prompt-hook.ts`): on every code-intent prompt, matches the prompt against the ledger (pure local string matching — no LLM, no latency) and injects context when it mentions concepts with **unearned, decayed, or claimed-only P**: *default to tutor mode — hints, pseudocode, a skeleton, a failing test — not the finished answer.*
+- **Override, witnessed:** if you explicitly ask for the full code anyway, you get it — and `mirror override <concept>` logs the moment to `overrides.jsonl`. The report counts them per concept (§8). Never refused, always counted.
+- **No-AI challenges** (`mirror challenge <concept>`): the airtight P verification. An LLM generates an exercise + rubric at level `effective P + 1` into a sandbox; you hand-type the solution; grading first checks **provenance** (any AI edit event inside the sandbox voids the attempt — authorship certain by construction), then grades against the rubric. A pass sets verified P at that level. Commit-inference only ever proves presence (P1); **challenges are the only path to L2–L4**.
+- The same hook injects a compact **style digest** on code prompts, so generation matches your hand (§13).
 
-> The "withhold answers, give hints" behavior itself is already commoditized (Claude's Learning Mode, OpenAI's Study Mode). Don't rebuild the tutor — *route to it*. Your originality is the **ledger + the gating**, not the tutoring.
+> The "withhold answers, give hints" behavior itself is commoditized (Claude's Learning Mode, OpenAI's Study Mode). We didn't rebuild the tutor — the hook *routes* the session into it. The originality is the **ledger + the gating**, not the tutoring.
 
 ### v3 — THE GATE  📋 planned (backstop)
 A git **pre-commit** hook — the universal net. It catches code from **any** source (including the Copilot/paste blind spot the Mirror can't see), because everything funnels through `git commit`. Ships **advisory-first** (it *tells* you) before it ever **blocks**, and **fails open** if unsure — so a misfiring classifier never feels arbitrary.
@@ -251,12 +254,12 @@ A git **pre-commit** hook — the universal net. It catches code from **any** so
 
 ---
 
-## 8. The accountability layer
+## 8. The accountability layer  ✅ built
 
 Enforcement you can defeat (you can always `git commit --no-verify` or hand-edit the ledger) only works if the **honest path stays easier than the cheat path**, and if cheating is **visible**.
 
-- **Override is logged, not blocked.** You *can* ship un-owned code; it just gets written to an override log.
-- **Weekly report** surfaces the pattern ("you overrode React hooks 7× — go learn it").
+- **Override is logged, not blocked.** You *can* ship un-owned code; it just gets written to `overrides.jsonl` (`mirror override <concept>` — the tutor injection instructs Claude to run it after honoring an explicit request).
+- **Weekly report** surfaces the pattern ("you overrode React hooks 7× — go learn it") in its Overrides section.
 - **One public number** you show a friend or post — recruits identity and a little healthy shame, which beat raw friction.
 
 This is the "StickK" part: the consequence isn't a wall, it's **a witness**.
@@ -352,4 +355,4 @@ Without a metric you can't tell if it's working:
 
 ---
 
-*This document is the conceptual reference for AI Mirror. The implementation is v1.5: a `PostToolUse` hook logging provenance events (`src/hook.ts`), a tiered cached classifier, the skill ledger, the style corpus, and the `mirror` CLI (`src/cli.ts` — report / classify / ledger / style / setup / migrate). See [PLAN.md](PLAN.md) for the build history and what comes next.*
+*This document is the conceptual reference for AI Mirror. The implementation covers v1 through v2: provenance capture (`src/hook.ts`), the tiered cached classifier, the skill ledger, the style corpus, the tutor prompt hook (`src/prompt-hook.ts`), no-AI challenges, and the override witness — all through the `mirror` CLI (`src/cli.ts`). Only v3 (the git pre-commit gate) remains. See [PLAN.md](PLAN.md) for the build history.*

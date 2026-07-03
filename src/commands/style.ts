@@ -7,7 +7,7 @@ export async function styleCommand(args: string[]): Promise<void> {
 
   if (args.includes("--rebuild")) {
     try {
-      const profile = await rebuildProfile(paths.styleSamples, paths.styleProfile, paths.styleGuide);
+      const profile = await rebuildProfile(paths.styleSamples, paths.styleProfile, paths.styleGuide, paths.styleDigest);
       console.log(`✓ Profile rebuilt for: ${Object.keys(profile).join(", ") || "(no languages)"}`);
       console.log(`✓ ${paths.styleProfile}`);
       console.log(`✓ ${paths.styleGuide}`);

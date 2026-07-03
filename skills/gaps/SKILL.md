@@ -9,7 +9,7 @@ AI Mirror only tracks concepts that exist in the vault — everything else is si
 
 ## Step 0: Get the data
 
-1. Run `mirror gaps --json` (fallback if not linked: `bun run D:/Code-3/ai-mirror/src/cli.ts gaps --json`). Default window 30 days; pass `--days N` through if the user asked for a different window.
+1. Run `mirror gaps --json` (fallback if not linked: `bun run {{MIRROR_REPO}}/src/cli.ts gaps --json`). Default window 30 days; pass `--days N` through if the user asked for a different window.
 2. Read `~/.claude/vault-config.json` for `vault_path` (the active vault) and `archive_vault_path` (the old vault, read-only, import source).
 3. If all three lists are empty, say so and stop — no ceremony.
 

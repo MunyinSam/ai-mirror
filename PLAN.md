@@ -21,36 +21,50 @@
 
 ---
 
-## Target architecture
+## Target architecture (as built through v2)
 
 ```
+ ① PROMPT TIME (v2)
+  your prompt ──▶ UserPromptSubmit tutor hook (local ledger match, no LLM)
+                    injects: tutor-mode for unearned-P concepts + style digest
+                    explicit "give me the code" → full code + mirror override (witnessed)
+                          │
+ ② WRITE TIME (v1)        ▼
   Claude Code edit ──▶ PostToolUse hook (fast, local, no LLM)
                           │  appends raw event: file, lines, code snippet, hash
                           ▼
                    ~/.skillgate/events.jsonl          (append-only provenance log)
                           │
+ ③ REPORT TIME (v1.5)     │  lazy · cached · auto-syncs your commits
         ┌─────────────────┼──────────────────────────┐
         ▼                 ▼                          ▼
   mirror classify    mirror ledger               mirror style
   (batched LLM,      U ← vault confidence        hand-written corpus
-   cache by hash)    P ← hand-written code       → distilled style profile
-        │             + decay at read time       → injected into generation
+   cache by hash)    P ← hand-written code       → profile + digest ──▶ back to ①
+        │             + decay at read time            │
         └────────────────┬───────────────────────────┘
                          ▼
                    mirror report
-        within/beyond-skill split · trends · streak
+   within/beyond split · unfiled gaps · overrides · decay · trends
+                          │
+ ④ EARN TIME              ▼
+  commits / /drill → P1 (presence)
+  mirror challenge → P2–P4 (sandbox, provenance-void check, LLM-graded) ──▶ back to ①
 ```
 
 Data layout (`~/.skillgate/`, path configurable via `mirror.config.json`):
 
 ```
 events.jsonl          # append-only provenance log (schema v2)
-classify-cache.json   # code_hash → { concepts[], tags[] }   (LLM results, immutable log stays untouched)
+classify-cache.json   # code_hash → { concepts[], tags[], suggested[] }
 skills.json           # the ledger: per concept { U, P, evidence[], last_produced, decay }
+overrides.jsonl       # the witness: shipped-beyond-P moments        (v2)
+challenges/<slug>/    # no-AI challenge sandboxes: README, rubric, solution  (v2)
 style/
   samples.jsonl       # verified hand-written code samples
   profile.json        # distilled per-language style traits
   style-guide.md      # human/CLAUDE.md-readable version of the profile
+  digest.md           # ≤600-char version injected by the prompt hook (v2)
 archive/              # pre-migration backups
 ```
 
@@ -305,3 +319,58 @@ All new skills live in `~/.claude/skills/`; they read `mirror gaps --json` / `sk
 
 V0 before V1 (gap detection needs a vault to diff against). V1 before V2 (`/gaps` consumes
 `mirror gaps --json`). V3 anytime after V2. V4 is folded into `/gaps` but polished last.
+
+---
+
+# Stage 3 — v2: The Tutor
+
+> Decided 2026-07-03. Moves intervention upstream to generation time (CONCEPTS §7 v2),
+> adds the airtight P verification (challenges), and closes the style loop. The wall is
+> still never built: everything is override-able, and overrides are witnessed, not blocked.
+
+## Decisions locked in
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Tutor mechanism | **`UserPromptSubmit` hook injection** | Hook matches the prompt against beyond-P ledger concepts (pure local string matching — no LLM, no latency) and injects tutor-mode context. Harness-enforced, every session, never blocks. |
+| Overrides | **Allowed + logged** | Full code is always one explicit request away; the override lands in `overrides.jsonl` and the weekly report counts it. The witness, not the wall (CONCEPTS §8). |
+| Challenges | **`mirror challenge` CLI + LLM grading** | Generate exercise+rubric into a sandbox; user hand-types the solution (provenance-checked — no AI events may touch the sandbox); LLM grades against the rubric. Pass ⇒ verified P at the attempted level. This is what unlocks L2–L4. |
+| Style injection | **Same prompt hook** | Code-intent prompts get a compact style digest appended automatically; CLAUDE.md reference stays as fallback. |
+
+## Phases
+
+### Phase T0 — Tutor prompt hook  `[x]`
+
+- `src/prompt-hook.ts` (`UserPromptSubmit`): reads the prompt, detects code intent
+  (keyword heuristic), matches beyond-P / claimed-only ledger concepts by title tokens
+  (pure local, fast), and prints injected context: tutor-mode instructions + the override
+  protocol. No API calls, never exits non-zero (never blocks a prompt).
+- Matching logic lives in `src/tutor.ts` as pure functions — unit-tested.
+- `mirror setup` wires the hook; `mergeHookSettings` generalized per event type.
+
+### Phase T1 — Override log  `[x]`
+
+- `mirror override <concept> [--reason ...]` appends `{ts, concept, project, reason}` to
+  `overrides.jsonl`. The injected tutor context instructs Claude to run it after handing
+  over full code on explicit request.
+- Report: an **Overrides** section (count per concept, red); in `--json` too. /mirror-week
+  already reads the report, so the ritual picks it up for free.
+
+### Phase T2 — Challenges (airtight P)  `[x]`
+
+- `mirror challenge <concept>`: LLM generates an exercise spec + grading rubric at level
+  `effective P + 1` into `~/.skillgate/challenges/<slug>/` (README.md + empty solution file).
+- `mirror challenge grade`: provenance check first (no AI event may reference the sandbox
+  files — authorship certain by construction), then LLM grades the hand-typed solution
+  against the rubric. Pass ⇒ `produced` evidence `challenge:<slug>`, `coding_level` set to
+  the attempted level. Fail ⇒ feedback, no ledger change.
+- Commit-inference stays capped at P1 (presence); only challenges raise levels above 1.
+
+### Phase T3 — Style digest injection  `[x]`
+
+- `mirror style --rebuild` additionally writes `style/digest.md` (≤ ~600 chars, per-language
+  one-liners) — the prompt hook appends it on code-intent prompts.
+
+### Phase T4 — Docs  `[x]`
+
+- CONCEPTS §7 v2 → ✅ with what shipped vs 📋 deferred; README commands + hook table; glossary.

@@ -11,9 +11,10 @@ Run the steps in order; keep commentary minimal — the numbers talk.
 
 ## Step 1: The report (2 min)
 
-Run `mirror report` (fallback: `bun run D:/Code-3/ai-mirror/src/cli.ts report`) and show it in full. Call out exactly three things, one line each:
+Run `mirror report` (fallback: `bun run {{MIRROR_REPO}}/src/cli.ts report`) and show it in full. Call out exactly four things, one line each:
 - AI% vs last week (the trend line) — up, down, or flat.
 - The beyond-skill count and its heaviest concept.
+- Overrides (⚑): each one is a concept you shipped past the tutor — the strongest /gaps or `mirror challenge` candidates.
 - The clean-days streak.
 
 No moralizing. The mirror states; it doesn't lecture.
@@ -34,7 +35,7 @@ Run `mirror style`. If the sample count grew meaningfully since the last profile
 
 End with one line, formatted to be pasted anywhere (chat, tweet, a friend):
 
-> Week of [date]: **[N]% AI-written · [M] concepts beyond my skill · [K]-day clean streak.**
+> Week of [date]: **[N]% AI-written · [M] concepts beyond my skill · [O] overrides · [K]-day clean streak.**
 
 Ask nothing after it. The ritual ends on the number — identity and a witness beat friction (CONCEPTS §8).
 

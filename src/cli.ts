@@ -16,7 +16,9 @@ Commands:
   ledger sync [--days N] [--repo path]   infer P + style samples from hand-written commits
   ledger set <concept> <level>           manual claim (recorded as ⚠ claimed, not produced)
   style [--rebuild]                      style corpus status / rebuild the style profile
-  setup                                  wire the Claude Code hook + data directory
+  challenge <concept> | grade | list     no-AI challenge: hand-type it, get graded, earn P
+  override <concept> [--reason ...]      log that you shipped beyond your P (the witness)
+  setup                                  wire the Claude Code hooks + data directory
   migrate                                upgrade a v1 event log to schema v2
   help                                   show this help
 `;
@@ -49,6 +51,16 @@ switch (cmd) {
   case "style": {
     const { styleCommand } = await import("./commands/style.ts");
     await styleCommand(rest);
+    break;
+  }
+  case "challenge": {
+    const { challengeCommand } = await import("./commands/challenge.ts");
+    await challengeCommand(rest);
+    break;
+  }
+  case "override": {
+    const { overrideCommand } = await import("./commands/override.ts");
+    overrideCommand(rest);
     break;
   }
   case "setup": {

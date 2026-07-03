@@ -9,6 +9,7 @@ import { c, splitBar } from "../colors.ts";
 import { daysUntilDecay, effectiveP, isClaimedOnly, loadLedger, saveLedger, syncUnderstanding } from "../ledger.ts";
 import { readEvents } from "../log.ts";
 import { syncHandwritten } from "../sync.ts";
+import { readOverrides } from "./override.ts";
 import type { ClassifyCache, Ledger, MirrorEvent } from "../types.ts";
 import { normalizePath } from "../util.ts";
 import { loadVaultConcepts } from "../vault.ts";
@@ -260,6 +261,15 @@ export async function reportCommand(args: string[]): Promise<void> {
     .filter((a): a is { name: string; days: number } => a.days !== null && a.days <= 7)
     .sort((a, b) => a.days - b.days);
 
+  // Overrides in this period: shipped-anyway moments, counted per concept.
+  const overrideCounts = new Map<string, number>();
+  for (const o of readOverrides(paths.overrides)) {
+    const t = new Date(o.ts);
+    if (t < current.period.start || t > current.period.end) continue;
+    if (projectFilter && normalizePath(o.project) !== projectFilter) continue;
+    overrideCounts.set(o.concept, (overrideCounts.get(o.concept) ?? 0) + 1);
+  }
+
   if (json) {
     console.log(
       JSON.stringify(
@@ -280,6 +290,7 @@ export async function reportCommand(args: string[]): Promise<void> {
             beyond: w.buckets.beyond.length,
           })),
           decay_alerts: decayAlerts,
+          overrides: Object.fromEntries(overrideCounts),
           synced: sync ? { evidence: sync.evidence, samples: sync.samples } : null,
         },
         null,
@@ -340,6 +351,14 @@ export async function reportCommand(args: string[]): Promise<void> {
     .map((w) => `${shortLabel(unit, w.period)}: ${aiPctColored(w.aiPct)}, ${w.buckets.beyond.length} beyond`)
     .join(c.dim("  ·  "));
   console.log(c.dim(`Past ${unit}s: `) + trendLine);
+
+  if (overrideCounts.size > 0) {
+    console.log(`\n${c.bold("Overrides")} ${c.dim("— you shipped beyond your P anyway (witnessed, not judged)")}`);
+    const sorted = [...overrideCounts.entries()].sort((a, b) => b[1] - a[1]);
+    for (const [concept, n] of sorted) {
+      console.log(`   ${c.red("⚑")} ${concept.padEnd(36)} ${n}×  ${c.dim(`→ /drill ${concept}`)}`);
+    }
+  }
 
   if (decayAlerts.length > 0) {
     console.log(`\n${c.bold("Decay alerts")}`);

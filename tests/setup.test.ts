@@ -13,7 +13,7 @@ describe("mergeHookSettings", () => {
         UserPromptSubmit: [{ hooks: [{ type: "command", command: "something" }] }],
       },
     };
-    const merged = mergeHookSettings(settings, CMD) as {
+    const merged = mergeHookSettings(settings, "PostToolUse", CMD, "Edit|Write") as {
       hooks: { PostToolUse: unknown[]; UserPromptSubmit: unknown[] };
     };
     expect(merged.hooks.PostToolUse).toHaveLength(2);
@@ -31,15 +31,18 @@ describe("mergeHookSettings", () => {
         ],
       },
     };
-    const merged = mergeHookSettings(settings, CMD) as {
+    const merged = mergeHookSettings(settings, "PostToolUse", CMD, "Edit|Write") as {
       hooks: { PostToolUse: { hooks: { command: string }[] }[] };
     };
     expect(merged.hooks.PostToolUse).toHaveLength(1);
     expect(merged.hooks.PostToolUse[0]!.hooks[0]!.command).toBe(CMD);
   });
 
-  test("works on empty settings", () => {
-    const merged = mergeHookSettings({}, CMD) as { hooks: { PostToolUse: unknown[] } };
-    expect(merged.hooks.PostToolUse).toHaveLength(1);
+  test("works on empty settings and omits matcher when not given", () => {
+    const merged = mergeHookSettings({}, "UserPromptSubmit", CMD) as {
+      hooks: { UserPromptSubmit: { matcher?: string }[] };
+    };
+    expect(merged.hooks.UserPromptSubmit).toHaveLength(1);
+    expect(merged.hooks.UserPromptSubmit[0]!.matcher).toBeUndefined();
   });
 });

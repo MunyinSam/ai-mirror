@@ -30,6 +30,9 @@ export function dataPaths(config = loadConfig()) {
     styleSamples: resolve(d, "style", "samples.jsonl"),
     styleProfile: resolve(d, "style", "profile.json"),
     styleGuide: resolve(d, "style", "style-guide.md"),
+    styleDigest: resolve(d, "style", "digest.md"),
+    overrides: resolve(d, "overrides.jsonl"),
+    challengesDir: resolve(d, "challenges"),
     archiveDir: resolve(d, "archive"),
   };
 }
