@@ -8,7 +8,8 @@ how much of it you couldn't have written yourself.
 Usage: mirror <command> [options]
 
 Commands:
-  report [project] [--week N] [--json]   weekly report (default command)
+  report [project] [--day|--week|--month|--year] [--back N] [--files] [--json]
+                                         the mirror report (default: this week)
   classify                               classify uncached events (tags + vault concepts)
   gaps [--days N] [--json]               unfiled / beyond-skill / decaying concepts
   ledger [filter]                        view the skill ledger

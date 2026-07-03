@@ -41,6 +41,57 @@ function closePrompts(): void {
   rl = null;
 }
 
+const CONCEPT_TEMPLATE = `---
+title:
+aliases: []
+type: concept
+parent:
+domain:
+status: draft
+confidence: learning
+---
+
+# {{title}}
+
+<!-- One-sentence definition. -->
+
+<!-- Body. -->
+`;
+
+const ROOT_MOC = `---
+title: Concepts
+aliases: []
+type: moc
+parent:
+domain:
+---
+
+# Concepts
+
+Root index of all concept domains. Add a wikilink here when registering a new top-level domain MOC.
+
+<!-- Domains are created on demand as concepts get filed (see /gaps, /drill,
+     /add-new-concepts). This vault was scaffolded by \`mirror setup\` — a
+     minimal starting point, not a replacement for the full /init-vault skill. -->
+`;
+
+/** Minimal, non-interactive vault scaffold: just enough structure for the
+ *  mirror + companion skills to read/write concept notes. The fuller
+ *  /init-vault skill (research/projects/reviews/_claude spec) can layer on
+ *  top later — this never conflicts with it, same vault-config.json shape. */
+function scaffoldMinimalVault(vaultDir: string): void {
+  mkdirSync(resolve(vaultDir, "concepts"), { recursive: true });
+  mkdirSync(resolve(vaultDir, "templates"), { recursive: true });
+  const conceptTemplatePath = resolve(vaultDir, "templates/concept.md");
+  if (!existsSync(conceptTemplatePath)) {
+    writeFileSync(conceptTemplatePath, CONCEPT_TEMPLATE, "utf8");
+  }
+  const mocPath = resolve(vaultDir, "concepts/_moc.md");
+  if (!existsSync(mocPath)) {
+    writeFileSync(mocPath, ROOT_MOC, "utf8");
+  }
+}
+
 interface HookEntry {
   matcher?: string;
   hooks?: { type: string; command: string }[];
@@ -101,7 +152,39 @@ export async function setupCommand(): Promise<void> {
     console.log("✓ .env already exists");
   }
 
-  // 4. Companion skills (/gaps, /drill, /mirror-week)
+  // 4. Vault — the mirror can't track concepts without one
+  const VAULT_CONFIG_PATH = resolve(HOME, ".claude/vault-config.json");
+  if (existsSync(VAULT_CONFIG_PATH)) {
+    try {
+      const { vault_path } = JSON.parse(readFileSync(VAULT_CONFIG_PATH, "utf8")) as {
+        vault_path: string;
+      };
+      console.log(`✓ Vault found: ${vault_path}`);
+    } catch {
+      console.log("⚠ ~/.claude/vault-config.json exists but couldn't be parsed — leaving it alone");
+    }
+  } else {
+    console.log("\nNo vault found. Without one, the mirror can log AI edits but can't map them");
+    console.log("to concepts, build a skill ledger, or run /gaps, /drill, /mirror-week.");
+    const makeVault = await ask("Create a minimal vault now? (y/n)", "y");
+    if (makeVault.toLowerCase().startsWith("y")) {
+      const defaultVaultDir = resolve(HOME, ".skillgate/vault");
+      const vaultDir = await ask("Where should the vault live?", defaultVaultDir);
+      scaffoldMinimalVault(vaultDir);
+      writeFileSync(
+        VAULT_CONFIG_PATH,
+        JSON.stringify({ vault_path: vaultDir, initialized_at: new Date().toISOString().slice(0, 10) }, null, 2),
+        "utf8"
+      );
+      console.log(`✓ Vault scaffolded at ${vaultDir}`);
+      console.log("  File your first concept anytime with the /add-new-concepts skill,");
+      console.log("  or let /gaps + /drill grow it from what the mirror finds.");
+    } else {
+      console.log("⚠ Skipping — run the /init-vault skill later, or re-run `mirror setup`.");
+    }
+  }
+
+  // 5. Companion skills (/gaps, /drill, /mirror-week)
   const installSkills = await ask(
     "Install the companion skills (/gaps, /drill, /mirror-week)? (y/n)",
     "y"
@@ -118,7 +201,7 @@ export async function setupCommand(): Promise<void> {
     }
   }
 
-  // 5. Observe-only policy block in the global CLAUDE.md (idempotent by marker)
+  // 6. Observe-only policy block in the global CLAUDE.md (idempotent by marker)
   const addPolicy = await ask(
     "Add the observe-only AI Mirror policy to ~/.claude/CLAUDE.md? (y/n)",
     "y"
@@ -138,7 +221,7 @@ export async function setupCommand(): Promise<void> {
 
   closePrompts();
 
-  // 6. Global `mirror` command
+  // 7. Global `mirror` command
   try {
     const { execSync } = await import("node:child_process");
     execSync("bun link", { cwd: REPO_ROOT, stdio: "inherit" });

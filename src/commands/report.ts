@@ -1,29 +1,84 @@
-// Report v2 (PLAN Phase 5): the weekly mirror, with the ledger behind it.
-// Buckets every concept the AI handled into within / beyond / claimed-only
-// skill, using effective (decayed) P.
+// Report v2 (PLAN Phase 5 + UX feedback): the mirror, with the ledger behind
+// it. Period views (day/week/month/year), repo-grouped files, colored output,
+// and an automatic hand-written sync so committed work is credited without a
+// manual `ledger sync` step.
 import { execSync } from "node:child_process";
-import { dataPaths } from "../config.ts";
+import { loadConfig, dataPaths } from "../config.ts";
 import { classifyAll } from "../classifier.ts";
+import { c, splitBar } from "../colors.ts";
 import { daysUntilDecay, effectiveP, isClaimedOnly, loadLedger, saveLedger, syncUnderstanding } from "../ledger.ts";
 import { readEvents } from "../log.ts";
+import { syncHandwritten } from "../sync.ts";
 import type { ClassifyCache, Ledger, MirrorEvent } from "../types.ts";
 import { normalizePath } from "../util.ts";
 import { loadVaultConcepts } from "../vault.ts";
 
-interface WeekWindow {
+export type PeriodUnit = "day" | "week" | "month" | "year";
+
+interface Period {
   start: Date;
   end: Date;
 }
 
-/** Week window (Sun–Sat), `offset` weeks back from the current one. */
-export function weekRange(offset = 0, now = new Date()): WeekWindow {
+/** Calendar period `back` steps before the current one. Weeks run Sun–Sat. */
+export function periodRange(unit: PeriodUnit, back = 0, now = new Date()): Period {
   const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay() - offset * 7);
   start.setHours(0, 0, 0, 0);
+  switch (unit) {
+    case "day":
+      start.setDate(start.getDate() - back);
+      break;
+    case "week":
+      start.setDate(start.getDate() - start.getDay() - back * 7);
+      break;
+    case "month":
+      start.setDate(1);
+      start.setMonth(start.getMonth() - back);
+      break;
+    case "year":
+      start.setMonth(0, 1);
+      start.setFullYear(start.getFullYear() - back);
+      break;
+  }
   const end = new Date(start);
-  end.setDate(start.getDate() + 6);
+  switch (unit) {
+    case "day":
+      break;
+    case "week":
+      end.setDate(start.getDate() + 6);
+      break;
+    case "month":
+      end.setMonth(start.getMonth() + 1, 0);
+      break;
+    case "year":
+      end.setMonth(11, 31);
+      break;
+  }
   end.setHours(23, 59, 59, 999);
   return { start, end };
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Local date, not toISOString() — UTC rendering shifts +07:00 users back a day.
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export function periodLabel(unit: PeriodUnit, p: Period): string {
+  switch (unit) {
+    case "day": return iso(p.start);
+    case "week": return `week of ${iso(p.start)} → ${iso(p.end)}`;
+    case "month": return `${MONTHS[p.start.getMonth()]} ${p.start.getFullYear()}`;
+    case "year": return String(p.start.getFullYear());
+  }
+}
+
+function shortLabel(unit: PeriodUnit, p: Period): string {
+  switch (unit) {
+    case "day": return iso(p.start).slice(5);
+    case "week": return `wk ${iso(p.start).slice(5)}`;
+    case "month": return `${MONTHS[p.start.getMonth()]}`;
+    case "year": return String(p.start.getFullYear());
+  }
 }
 
 function gitTotalLinesAdded(repoPath: string, since: string, until: string): number {
@@ -54,56 +109,66 @@ function bucketOf(ledger: Ledger, concept: string): SkillBucket {
   return effectiveP(entry) > 0 ? "within" : "beyond";
 }
 
-interface WeekStats {
-  window: WeekWindow;
+interface RepoActivity {
+  edits: number;
+  files: Set<string>;
+}
+
+interface PeriodStats {
+  period: Period;
   aiLines: number;
   youLines: number;
   aiPct: number;
-  conceptUse: Map<string, number>; // concept → AI usage count
+  conceptUse: Map<string, number>;
   buckets: Record<SkillBucket, string[]>;
-  unfiledUse: Map<string, number>; // suggested concepts with no vault note
-  aiFiles: Map<string, number>;
-  cleanDays: number; // days with AI events, none beyond skill
+  unfiledUse: Map<string, number>;
+  repoActivity: Map<string, RepoActivity>;
+  cleanDays: number;
 }
 
-function computeWeek(
+function computePeriod(
   events: MirrorEvent[],
   cache: ClassifyCache,
   ledger: Ledger,
-  window: WeekWindow,
+  period: Period,
+  baselineProjects: string[],
   projectFilter?: string
-): WeekStats {
-  const week = events.filter((e) => {
+): PeriodStats {
+  const inPeriod = events.filter((e) => {
     const t = new Date(e.ts);
-    const inWeek = t >= window.start && t <= window.end;
+    const inWindow = t >= period.start && t <= period.end;
     const inProject = projectFilter ? normalizePath(e.project) === projectFilter : true;
-    return inWeek && inProject;
+    return inWindow && inProject;
   });
 
-  const aiEvents = week.filter((e) => e.author === "ai");
+  const aiEvents = inPeriod.filter((e) => e.author === "ai");
   const aiLines = aiEvents.reduce((s, e) => s + e.lines, 0);
 
-  // Git baseline computed per-project from the log — same answer from any cwd.
-  const projects = projectFilter
-    ? [projectFilter]
-    : [...new Set(week.map((e) => normalizePath(e.project)))];
+  // Git baseline over EVERY known repo (all-time event projects + configured
+  // extras) — not just repos with AI events this period, otherwise a period of
+  // purely hand-written commits is invisible.
+  const projects = projectFilter ? [projectFilter] : baselineProjects;
   const totalGitLines = projects.reduce(
-    (sum, repo) => sum + gitTotalLinesAdded(repo, window.start.toISOString(), window.end.toISOString()),
+    (sum, repo) => sum + gitTotalLinesAdded(repo, period.start.toISOString(), period.end.toISOString()),
     0
   );
   const youLines = Math.max(0, totalGitLines - aiLines);
   const total = aiLines + youLines;
 
   const conceptUse = new Map<string, number>();
+  const unfiledUse = new Map<string, number>();
   const beyondDays = new Set<string>();
   const activeDays = new Set<string>();
-  const aiFiles = new Map<string, number>();
+  const repoActivity = new Map<string, RepoActivity>();
 
-  const unfiledUse = new Map<string, number>();
   for (const e of aiEvents) {
     const day = e.ts.slice(0, 10);
     activeDays.add(day);
-    aiFiles.set(e.file, (aiFiles.get(e.file) ?? 0) + 1);
+    const repo = normalizePath(e.project);
+    const activity = repoActivity.get(repo) ?? { edits: 0, files: new Set<string>() };
+    activity.edits++;
+    activity.files.add(e.file);
+    repoActivity.set(repo, activity);
     for (const concept of cache[e.code_hash]?.concepts ?? []) {
       conceptUse.set(concept, (conceptUse.get(concept) ?? 0) + 1);
       if (bucketOf(ledger, concept) === "beyond") beyondDays.add(day);
@@ -119,32 +184,56 @@ function computeWeek(
   }
 
   return {
-    window,
+    period,
     aiLines,
     youLines,
     aiPct: total === 0 ? 0 : Math.round((aiLines / total) * 100),
     conceptUse,
     buckets,
     unfiledUse,
-    aiFiles,
+    repoActivity,
     cleanDays: activeDays.size - beyondDays.size,
   };
 }
 
-const fmt = (d: Date) => d.toISOString().slice(0, 10);
+function aiPctColored(pct: number): string {
+  const s = `${pct}% AI-written`;
+  return pct >= 60 ? c.red(s) : pct >= 30 ? c.yellow(s) : c.green(s);
+}
 
 export async function reportCommand(args: string[]): Promise<void> {
   const json = args.includes("--json");
-  const weekIdx = args.indexOf("--week");
-  const offset = weekIdx >= 0 ? Number(args[weekIdx + 1]) || 0 : 0;
-  const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--week");
+  const showFiles = args.includes("--files");
+
+  // Period: --day/--week/--month/--year, offset via --back N.
+  // Back-compat: `--week N` still means N weeks back.
+  let unit: PeriodUnit = "week";
+  for (const u of ["day", "week", "month", "year"] as const) {
+    if (args.includes(`--${u}`)) unit = u;
+  }
+  const backIdx = args.indexOf("--back");
+  const unitIdx = args.indexOf(`--${unit}`);
+  const unitArg = unitIdx >= 0 ? Number(args[unitIdx + 1]) : NaN;
+  const back = backIdx >= 0 ? Number(args[backIdx + 1]) || 0 : Number.isInteger(unitArg) ? unitArg : 0;
+
+  const consumed = new Set<number>();
+  args.forEach((a, i) => {
+    if (a.startsWith("--")) {
+      consumed.add(i);
+      if ((a === "--back" || a === `--${unit}`) && Number.isInteger(Number(args[i + 1]))) consumed.add(i + 1);
+    }
+  });
+  const positional = args.filter((_, i) => !consumed.has(i));
   const projectFilter = positional[0] ? normalizePath(positional[0]) : undefined;
 
   const paths = dataPaths();
+  const config = loadConfig();
   const events = readEvents(paths.events);
   const vault = loadVaultConcepts();
 
-  // Classify anything uncached, sync U — the report is where lazy work happens.
+  // Lazy work happens here: credit recent hand-written commits, then classify
+  // anything uncached, then mirror U from the vault.
+  const sync = await syncHandwritten(30).catch(() => null);
   const { cache } = await classifyAll(
     paths.cache,
     events.map((e) => ({ code_hash: e.code_hash, snippet: e.snippet, lang: e.lang })),
@@ -154,9 +243,16 @@ export async function reportCommand(args: string[]): Promise<void> {
   syncUnderstanding(ledger, vault);
   saveLedger(paths.skills, ledger);
 
-  const current = computeWeek(events, cache, ledger, weekRange(offset), projectFilter);
-  const trend = [1, 2, 3].map((back) =>
-    computeWeek(events, cache, ledger, weekRange(offset + back), projectFilter)
+  const baselineProjects = [
+    ...new Set([
+      ...events.map((e) => normalizePath(e.project)),
+      ...(config.projects ?? []).map(normalizePath),
+    ]),
+  ];
+
+  const current = computePeriod(events, cache, ledger, periodRange(unit, back), baselineProjects, projectFilter);
+  const trend = [1, 2, 3].map((n) =>
+    computePeriod(events, cache, ledger, periodRange(unit, back + n), baselineProjects, projectFilter)
   );
 
   const decayAlerts = Object.entries(ledger.concepts)
@@ -168,19 +264,23 @@ export async function reportCommand(args: string[]): Promise<void> {
     console.log(
       JSON.stringify(
         {
-          week: { start: fmt(current.window.start), end: fmt(current.window.end) },
+          period: { unit, start: iso(current.period.start), end: iso(current.period.end) },
           project: projectFilter ?? null,
           lines: { you: current.youLines, ai: current.aiLines, ai_pct: current.aiPct },
           concepts: Object.fromEntries(current.conceptUse),
           buckets: current.buckets,
           unfiled: Object.fromEntries(current.unfiledUse),
           clean_days: current.cleanDays,
+          repos: Object.fromEntries(
+            [...current.repoActivity].map(([repo, a]) => [repo, { edits: a.edits, files: a.files.size }])
+          ),
           trend: trend.map((w) => ({
-            start: fmt(w.window.start),
+            start: iso(w.period.start),
             ai_pct: w.aiPct,
             beyond: w.buckets.beyond.length,
           })),
           decay_alerts: decayAlerts,
+          synced: sync ? { evidence: sync.evidence, samples: sync.samples } : null,
         },
         null,
         2
@@ -190,54 +290,79 @@ export async function reportCommand(args: string[]): Promise<void> {
   }
 
   const label = projectFilter ?? "all projects";
-  console.log(`\nAI Mirror — week of ${fmt(current.window.start)} → ${fmt(current.window.end)}  [${label}]`);
-  console.log("─".repeat(56));
-  console.log(`Code shipped:        ${current.aiLines + current.youLines} lines`);
-  console.log(`  you: ${current.youLines}  ·  AI: ${current.aiLines}  →  ${current.aiPct}% AI-written`);
+  console.log("");
+  console.log(c.bold(c.cyan(`AI Mirror — ${periodLabel(unit, current.period)}`)) + c.dim(`  [${label}]`));
+  console.log(c.dim("─".repeat(56)));
+
+  const total = current.aiLines + current.youLines;
+  console.log(`Code shipped   ${c.bold(String(total))} lines`);
+  console.log(
+    `  ${splitBar(current.aiPct)}  ${c.green(`you ${current.youLines}`)} · ${c.red(`AI ${current.aiLines}`)} → ${aiPctColored(current.aiPct)}`
+  );
+  if (sync && (sync.evidence > 0 || sync.samples > 0)) {
+    console.log(c.dim(`  (auto-synced commits: +${sync.evidence} P evidence, +${sync.samples} style samples)`));
+  }
 
   if (current.conceptUse.size > 0) {
-    console.log(`\nConcepts the AI handled for you:`);
-    console.log(`   ✓ within your skill:   ${current.buckets.within.length}`);
-    console.log(`   ⚠ beyond your skill:   ${current.buckets.beyond.length}`);
+    console.log(`\n${c.bold("Concepts the AI handled for you")}`);
+    console.log(`   ${c.green("✓")} within your skill    ${c.bold(String(current.buckets.within.length))}`);
+    console.log(`   ${c.red("⚠")} beyond your skill    ${c.bold(String(current.buckets.beyond.length))}`);
     if (current.buckets.claimed.length > 0) {
-      console.log(`   ⚠ claimed-only skill:  ${current.buckets.claimed.length}`);
+      console.log(`   ${c.yellow("⚠")} claimed-only skill   ${c.bold(String(current.buckets.claimed.length))}`);
     }
-    for (const concept of current.buckets.beyond.sort(
+    const beyondSorted = current.buckets.beyond.sort(
       (a, b) => (current.conceptUse.get(b) ?? 0) - (current.conceptUse.get(a) ?? 0)
-    )) {
-      console.log(`        · ${concept.padEnd(32)} used ${current.conceptUse.get(concept)}×`);
+    );
+    for (const concept of beyondSorted.slice(0, 8)) {
+      console.log(c.red(`        · ${concept.padEnd(34)} used ${current.conceptUse.get(concept)}×`));
     }
   } else if (current.aiLines > 0) {
-    console.log(`\n(no vault concepts mapped — add an ANTHROPIC_API_KEY and run \`mirror classify\`)`);
+    console.log(
+      c.dim(
+        process.env["ANTHROPIC_API_KEY"]
+          ? `\n(no vault concepts detected in this period)`
+          : `\n(no vault concepts mapped — add an ANTHROPIC_API_KEY and run \`mirror classify\`)`
+      )
+    );
   }
 
   if (current.unfiledUse.size > 0) {
-    console.log(`\nUnfiled — AI used these, but your vault has no note (untracked):`);
+    console.log(`\n${c.bold("Unfiled")} ${c.dim("— AI used these, your vault has no note (untracked)")}`);
     const sorted = [...current.unfiledUse.entries()].sort((a, b) => b[1] - a[1]);
-    for (const [name, n] of sorted.slice(0, 8)) {
-      console.log(`   ✚ ${name.padEnd(36)} ${n}×`);
+    for (const [name, n] of sorted.slice(0, 6)) {
+      console.log(`   ${c.yellow("✚")} ${name.padEnd(36)} ${n}×`);
     }
-    console.log(`   → run \`mirror gaps\` or the /gaps skill to triage`);
+    console.log(c.dim(`   → \`mirror gaps\` or /gaps to triage`));
   }
 
-  console.log(`\nDays shipping only within your skill: ${current.cleanDays} 🔥`);
-
+  console.log(`\nDays shipping only within your skill: ${c.bold(String(current.cleanDays))} 🔥`);
   const trendLine = trend
-    .map((w) => `${fmt(w.window.start).slice(5)}: ${w.aiPct}% AI, ${w.buckets.beyond.length} beyond`)
-    .join("  ·  ");
-  console.log(`Past weeks: ${trendLine}`);
+    .map((w) => `${shortLabel(unit, w.period)}: ${aiPctColored(w.aiPct)}, ${w.buckets.beyond.length} beyond`)
+    .join(c.dim("  ·  "));
+  console.log(c.dim(`Past ${unit}s: `) + trendLine);
 
   if (decayAlerts.length > 0) {
-    console.log(`\nDecay alerts:`);
-    for (const a of decayAlerts) console.log(`   ⏳ ${a.name} — P drops in ${a.days} day(s)`);
+    console.log(`\n${c.bold("Decay alerts")}`);
+    for (const a of decayAlerts) {
+      console.log(`   ${c.yellow("⏳")} ${a.name.padEnd(36)} P drops in ${a.days} day(s)`);
+    }
   }
 
-  if (current.aiFiles.size > 0) {
-    console.log(`\nFiles AI touched (${current.aiFiles.size}):`);
-    for (const [f, n] of current.aiFiles) console.log(`   ${n}×  ${f}`);
+  if (current.repoActivity.size > 0) {
+    console.log(`\n${c.bold("Where the AI worked")}`);
+    const repos = [...current.repoActivity.entries()].sort((a, b) => b[1].edits - a[1].edits);
+    for (const [repo, a] of repos) {
+      console.log(`   ${c.cyan(repo.padEnd(40))} ${a.edits} edit(s) · ${a.files.size} file(s)`);
+      if (showFiles) {
+        for (const f of a.files) console.log(c.dim(`      ${f}`));
+      }
+    }
+    if (!showFiles) console.log(c.dim(`   (add --files for the full file list)`));
   }
 
   console.log(
-    `\n(you-lines = git lines added − AI lines; AI rewrites double-count and\n uncommitted AI edits skew the split — treat the ratio as a trend, not truth)\n`
+    c.dim(
+      `\nyou-lines = git lines added − AI lines; AI rewrites double-count and\nuncommitted AI edits skew the split — treat the ratio as a trend, not truth.\n`
+    )
   );
 }

@@ -7,6 +7,9 @@ const CONFIG_PATH = resolve(REPO_ROOT, "mirror.config.json");
 
 export interface MirrorConfig {
   data_dir: string;
+  /** extra repos to include in the git baseline even if the AI never touched
+   *  them — hand-written-only projects are invisible otherwise */
+  projects?: string[];
 }
 
 export function loadConfig(): MirrorConfig {

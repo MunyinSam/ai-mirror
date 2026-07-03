@@ -66,7 +66,7 @@ Upgrading from the v1 log format? Run `mirror migrate` once.
 
 | Command | What it does |
 |---------|--------------|
-| `mirror` | weekly report (add a project path to filter, `--week 1` for last week, `--json` for scripts) |
+| `mirror` | the report — `--day` / `--week` / `--month` / `--year` views, `--back N` to go back, a project path to filter, `--files` for per-file detail, `--json` for scripts. Auto-credits recent hand-written commits (last 30 days) on every run. |
 | `mirror classify` | classify uncached events now (otherwise happens at report time) |
 | `mirror ledger` | view U / stored P / effective (decayed) P per concept |
 | `mirror ledger sync` | scan recent commits for hand-written code → P evidence + style samples |
@@ -82,6 +82,7 @@ Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat
 
 - The you/AI line split is an estimate (AI rewrites double-count; uncommitted AI edits skew it). Trend, not truth.
 - The hook only sees Claude Code's Edit/Write tools — Copilot, browser paste, and Bash-written code count as "you" until the v3 git gate exists.
+- Your own commits never create log events (no hook fires — that's the provenance signal). They're counted from git history at report time and credited as P by the auto-sync. Repos the AI has never touched are invisible to the baseline unless you add them to `projects` in `mirror.config.json`.
 - P-inference credits any committed code the Mirror didn't log — including AI code from before the Mirror existed. It gets cleaner the longer it runs.
 
 ---
