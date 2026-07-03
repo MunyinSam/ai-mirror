@@ -18,7 +18,10 @@ Concepts the AI handled for you:
         · Python async/await and the Event Loop used 1×
 
 Days shipping only within your skill: 1 🔥
-Past weeks: 06-20: 0% AI, 0 beyond  ·  06-13: 0% AI, 0 beyond
+
+Past weeks:
+   wk 06-20  ████████████████  0% AI-written, 0 beyond
+   wk 06-13  ████████████████  0% AI-written, 0 beyond
 ```
 
 The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
@@ -77,15 +80,37 @@ Upgrading from the v1 log format? Run `mirror migrate` once.
 | `mirror challenge <concept>` | generate a no-AI challenge sandbox; hand-type the solution to earn verified P (the only path to L2–L4) |
 | `mirror challenge grade` | provenance-check the sandbox (AI edits void it), then LLM-grade against the rubric |
 | `mirror override <concept>` | log that you shipped code beyond your P — witnessed, never blocked |
+| `mirror gate install [repo]` | wire the v3 pre-commit advisory into a repo (chains any existing hook; `uninstall` restores it) |
+| `mirror gate check` | what the hook runs: classify the staged diff, name beyond-skill concepts, always exit 0 |
 
 Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat JSONL/JSON — human-readable, git-diffable, and schema-ready for Postgres later (`docs/pg-migration.md`).
+
+---
+
+## How lines are counted
+
+The report's you/AI split comes from two independent counters:
+
+**AI lines — counted directly, at write time.** The `PostToolUse` hook counts the lines of every Edit/Write the agent makes (`content` for Write, `new_string` for Edit) and logs them to `events.jsonl`. No filtering — blank lines, comments, and non-code files all count. The report sums these per period.
+
+**Your lines — inferred, at report time.** Git doesn't record who typed what, so your lines are a subtraction, not a measurement:
+
+```
+you-lines = max(0, git lines added across all known repos − AI lines)
+```
+
+where "git lines added" is the added-column total of `git log --numstat` over the period.
+
+**P evidence uses a stricter test.** For crediting skill, `mirror ledger sync` doesn't trust the subtraction. It parses each commit's added hunks and checks them against the logged AI snippets line-by-line: a hunk counts as yours only if it's in a code language, at least 3 lines, and **fewer than half** of its significant lines (trimmed, ≥ 8 chars — braces and blanks carry no authorship signal) appear in the AI snippet log. Surviving hunks become P evidence and style-corpus samples.
+
+Consequence of the subtraction: when the AI writes 50 lines and then rewrites them, that's 100 AI lines against ~50 committed — the split can undercount you within a period. That's why the report footer says *trend, not truth*.
 
 ---
 
 ## Honest limits
 
 - The you/AI line split is an estimate (AI rewrites double-count; uncommitted AI edits skew it). Trend, not truth.
-- The hook only sees Claude Code's Edit/Write tools — Copilot, browser paste, and Bash-written code count as "you" until the v3 git gate exists.
+- The hook only sees Claude Code's Edit/Write tools — Copilot, browser paste, and Bash-written code count as "you" in the line split. The v3 gate closes the *concept* half of this hole at commit time (it classifies staged code regardless of author), but line-level provenance for those sources is gone by then.
 - Your own commits never create log events (no hook fires — that's the provenance signal). They're counted from git history at report time and credited as P by the auto-sync. Repos the AI has never touched are invisible to the baseline unless you add them to `projects` in `mirror.config.json`.
 - P-inference credits any committed code the Mirror didn't log — including AI code from before the Mirror existed. It gets cleaner the longer it runs.
 
@@ -95,8 +120,17 @@ Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat
 
 A `UserPromptSubmit` hook (wired by setup) checks every code-intent prompt against the ledger — locally, no API call. Mention a concept whose P is unearned, decayed, or claimed-only, and the session defaults to **tutor mode**: hints, pseudocode, a failing test. Ask explicitly for the full code and you get it — plus a logged override the weekly report counts. The same hook injects your style digest so generated code reads like yours.
 
-## What's next
+## The gate (v3) — built, advisory-only
 
-- **v3 — The Gate:** a git pre-commit backstop that catches AI code from any source (Copilot, browser paste). Advisory first, fails open. Built only when the mirror's data says it's needed.
+A git pre-commit backstop — the universal net that catches code from **any** source (Copilot, browser paste), because everything funnels through `git commit`. Run `mirror gate install` in a repo and every commit gets a short advisory:
+
+```
+── AI Mirror gate · advisory, never blocks · ~35% matches the AI log ──
+  ⚠ beyond your skill: Tree-sitter, Claude Code Hooks
+  · unfiled concepts: Worker Pool Pattern
+  committing anyway is fine — /drill <concept> is 10 minutes
+```
+
+Staged code hunks are classified (cache first; uncached ones get one LLM call with a 5-second timeout) and judged against your effective P. It **always exits 0** and fails open — no key, a timeout, or any error means silence, never a blocked commit. A pre-existing pre-commit hook is chained first and keeps its own blocking power. Every advisory lands in `gate.jsonl` — the data that will decide whether a blocking mode is ever justified.
 
 Build the mirror first; earn the right to build the wall.

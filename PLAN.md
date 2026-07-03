@@ -59,6 +59,7 @@ events.jsonl          # append-only provenance log (schema v2)
 classify-cache.json   # code_hash → { concepts[], tags[], suggested[] }
 skills.json           # the ledger: per concept { U, P, evidence[], last_produced, decay }
 overrides.jsonl       # the witness: shipped-beyond-P moments        (v2)
+gate.jsonl            # every pre-commit advisory the gate printed   (v3)
 challenges/<slug>/    # no-AI challenge sandboxes: README, rubric, solution  (v2)
 style/
   samples.jsonl       # verified hand-written code samples
@@ -242,8 +243,8 @@ the hand-written-code pipeline. 5 needs everything. 6 last so the doc describes 
 
 ## Out of scope (explicitly)
 
-- v2 tutor (prompt-time gating, no-AI challenges, automatic style injection)
-- v3 git pre-commit gate
+- v2 tutor (prompt-time gating, no-AI challenges, automatic style injection) — *built later, see Stage 3*
+- v3 git pre-commit gate — *built later (advisory-only), see Stage 4*
 - Postgres / Mac mini deployment (schema-ready only)
 - Full L1–L4 rubric grading of P (needs v2 challenges to verify levels)
 
@@ -374,3 +375,40 @@ V0 before V1 (gap detection needs a vault to diff against). V1 before V2 (`/gaps
 ### Phase T4 — Docs  `[x]`
 
 - CONCEPTS §7 v2 → ✅ with what shipped vs 📋 deferred; README commands + hook table; glossary.
+
+---
+
+# Stage 4 — v3: The Gate (advisory)
+
+> Decided 2026-07-03. Built ahead of the original "only if weekly data proves drift"
+> trigger, but the *teeth* still honor it: this stage ships advisory-only, and
+> `gate.jsonl` is the evidence log that will decide whether blocking mode ever exists.
+
+## Decisions locked in
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Classification at commit time | **LLM with 5s timeout, fail open** | Pasted/Copilot code — the gate's reason to exist — is never in the classify cache, so cache-only would miss exactly the target. One batched haiku call per commit with new code; no key or a timeout ⇒ tags/cache only, silence about the rest. Timed-out hunks stay uncached and get classified at the next report. |
+| Enforcement | **Advisory only** | Prints the beyond-skill readout, always exits 0. Blocking stays unbuilt until `gate.jsonl` proves advisory alone isn't changing behavior — the same evidence-first rule that gated v2/v3. |
+| Install | **Per-repo `mirror gate install`** | Explicit and reversible. Writes `.git/hooks/pre-commit`; an existing hook is chained first *with its blocking power intact* (`pre-commit.pre-mirror`); `uninstall` restores it. No global `core.hooksPath` takeover. |
+
+## Phases
+
+### Phase G0 — Gate  `[x]`
+
+- `src/gate.ts` — pure logic: staged-hunk filter (code langs, ≥3 lines, hunks judged
+  regardless of author), hunk→`ClassifyInput` hashing (re-commits hit the cache),
+  staged-diff AI% against the provenance log, and `assessStaged` (concepts →
+  beyond / claimed-only / within / unfiled against effective P; a concept missing
+  from the ledger is beyond by definition).
+- `src/commands/gate.ts` — `check` (called by the hook; whole body fails open),
+  `install` / `uninstall` with foreign-hook chaining.
+- `classifyAll` gained optional `{ timeoutMs, maxRetries }` for the commit-time budget.
+- Every advisory appended to `gate.jsonl` (`ts, project, ai_pct, beyond, claimed_only, unfiled`).
+- Unit tests for the pure logic; verified end-to-end in a scratch repo (advisory fired
+  on commit, foreign hook chained and kept its exit code, uninstall restored it).
+
+### Phase G1 — Report integration  `[ ]`
+
+- Weekly report reads `gate.jsonl`: advisories shown vs. beyond-skill commits that
+  followed anyway — the number that decides whether blocking mode is ever justified.

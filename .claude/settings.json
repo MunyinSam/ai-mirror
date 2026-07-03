@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(bun run src/cli.ts report)",
+      "Bash(npm test *)"
+    ]
+  }
+}

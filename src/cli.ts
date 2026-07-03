@@ -18,6 +18,8 @@ Commands:
   style [--rebuild]                      style corpus status / rebuild the style profile
   challenge <concept> | grade | list     no-AI challenge: hand-type it, get graded, earn P
   override <concept> [--reason ...]      log that you shipped beyond your P (the witness)
+  gate install|uninstall [repo]          the v3 pre-commit advisory (never blocks)
+  gate check                             run the advisory on the staged diff
   setup                                  wire the Claude Code hooks + data directory
   migrate                                upgrade a v1 event log to schema v2
   help                                   show this help
@@ -61,6 +63,11 @@ switch (cmd) {
   case "override": {
     const { overrideCommand } = await import("./commands/override.ts");
     overrideCommand(rest);
+    break;
+  }
+  case "gate": {
+    const { gateCommand } = await import("./commands/gate.ts");
+    await gateCommand(rest);
     break;
   }
   case "setup": {

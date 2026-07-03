@@ -32,6 +32,7 @@ export function dataPaths(config = loadConfig()) {
     styleGuide: resolve(d, "style", "style-guide.md"),
     styleDigest: resolve(d, "style", "digest.md"),
     overrides: resolve(d, "overrides.jsonl"),
+    gateLog: resolve(d, "gate.jsonl"),
     challengesDir: resolve(d, "challenges"),
     archiveDir: resolve(d, "archive"),
   };

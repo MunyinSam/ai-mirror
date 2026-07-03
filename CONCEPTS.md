@@ -247,8 +247,15 @@ Moves the intervention *upstream* to generation time — without ever blocking:
 
 > The "withhold answers, give hints" behavior itself is commoditized (Claude's Learning Mode, OpenAI's Study Mode). We didn't rebuild the tutor — the hook *routes* the session into it. The originality is the **ledger + the gating**, not the tutoring.
 
-### v3 — THE GATE  📋 planned (backstop)
-A git **pre-commit** hook — the universal net. It catches code from **any** source (including the Copilot/paste blind spot the Mirror can't see), because everything funnels through `git commit`. Ships **advisory-first** (it *tells* you) before it ever **blocks**, and **fails open** if unsure — so a misfiring classifier never feels arbitrary.
+### v3 — THE GATE  ✅ built (advisory-only backstop)
+A git **pre-commit** hook — the universal net. It catches code from **any** source (including the Copilot/paste blind spot the Mirror can't see), because everything funnels through `git commit`.
+
+- **`mirror gate install`** (per repo, explicit) writes `.git/hooks/pre-commit`; an existing hook is preserved and chained first *with its blocking power intact*. `mirror gate uninstall` restores it.
+- At commit time, **`mirror gate check`** reads the staged diff, classifies the added code hunks (classify-cache first; uncached hunks get one LLM call with a **5-second timeout**), and prints an advisory: concepts beyond your effective P, claimed-only concepts, unfiled concepts, and how much of the staged diff matches the AI provenance log.
+- **Advisory only, fails open.** The gate's own findings always exit 0 — no key, a timeout, or any internal error means silence, never a blocked commit. A misfiring classifier must never feel arbitrary.
+- Every advisory is appended to `gate.jsonl`, so "is advisory enough, or does v3 need teeth?" gets answered later with data — the same evidence-first rule that gated v2 and v3 themselves.
+
+📋 *Deliberately not built:* blocking mode. It stays unbuilt until `gate.jsonl` proves the advisory alone isn't changing behavior.
 
 **Principle: build the mirror first; earn the right to build the wall.**
 
@@ -306,7 +313,7 @@ Two design rules, both load-bearing:
 A tool about honest measurement must document its own error sources. These are known, accepted, and printed in the report footer:
 
 - **`you-lines = git lines added − AI lines` is an estimate.** AI rewrites of the same code double-count; AI edits not yet committed inflate AI% against the git baseline. Treat the ratio as a *trend*, not truth.
-- **Provenance blind spots:** code the agent writes via Bash heredocs or NotebookEdit, Copilot completions, and browser-chat pastes never fire the hook and count as "you." Acceptable for now; the v3 git gate is the universal net.
+- **Provenance blind spots:** code the agent writes via Bash heredocs or NotebookEdit, Copilot completions, and browser-chat pastes never fire the hook and count as "you." The v3 gate closes this at commit time for *concept* checks (it classifies the staged diff regardless of author), but the you/AI *line split* still can't see these sources.
 - **P-inference is a heuristic.** "Committed code that matches no logged AI snippet" is only as good as hook coverage — code AI wrote *before* the Mirror existed (or outside it) can be miscredited as hand-written. The corpus and ledger get cleaner the longer the Mirror runs. The airtight version is v2's sandboxed challenges.
 - **Snippet matching is line-based.** Trivial lines (braces, blanks, short returns) are excluded from authorship matching; a hunk is AI-matched at ≥50% significant-line overlap.
 
@@ -346,7 +353,7 @@ Without a metric you can't tell if it's working:
 | **Hook** | A command Claude Code runs automatically on an event (`PostToolUse`, etc.). |
 | **The Mirror (v1)** | Passive provenance log + weekly report. Observes, never blocks. |
 | **The Tutor (v2)** | Generation-time prevention — flips AI to hints for beyond-P concepts. |
-| **The Gate (v3)** | A git pre-commit backstop that catches everything at commit time. |
+| **The Gate (v3)** | A git pre-commit backstop that catches everything at commit time. Advisory-only; fails open. |
 | **Earn loop** | The way out of a block: learn it (U), then produce it (P). |
 | **Classifier** | Maps code → which concepts/levels it uses. Tiered: deterministic first, LLM for the rest. |
 | **Skill Ledger** | The local file storing U and P per concept. The spine. |
@@ -355,4 +362,4 @@ Without a metric you can't tell if it's working:
 
 ---
 
-*This document is the conceptual reference for AI Mirror. The implementation covers v1 through v2: provenance capture (`src/hook.ts`), the tiered cached classifier, the skill ledger, the style corpus, the tutor prompt hook (`src/prompt-hook.ts`), no-AI challenges, and the override witness — all through the `mirror` CLI (`src/cli.ts`). Only v3 (the git pre-commit gate) remains. See [PLAN.md](PLAN.md) for the build history.*
+*This document is the conceptual reference for AI Mirror. The implementation covers v1 through v3: provenance capture (`src/hook.ts`), the tiered cached classifier, the skill ledger, the style corpus, the tutor prompt hook (`src/prompt-hook.ts`), no-AI challenges, the override witness, and the advisory pre-commit gate (`src/gate.ts`) — all through the `mirror` CLI (`src/cli.ts`). Only v3's blocking mode remains, deliberately, pending evidence from `gate.jsonl`. See [PLAN.md](PLAN.md) for the build history.*

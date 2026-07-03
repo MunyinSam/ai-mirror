@@ -364,10 +364,12 @@ export async function reportCommand(rawArgs: string[]): Promise<void> {
   }
 
   console.log(`\nDays shipping only within your skill: ${c.bold(String(current.cleanDays))} 🔥`);
-  const trendLine = trend
-    .map((w) => `${shortLabel(unit, w.period)}: ${aiPctColored(w.aiPct)}, ${w.buckets.beyond.length} beyond`)
-    .join(c.dim("  ·  "));
-  console.log(c.dim(`Past ${unit}s: `) + trendLine);
+  console.log(c.dim(`\nPast ${unit}s:`));
+  for (const w of trend) {
+    console.log(
+      `   ${shortLabel(unit, w.period).padEnd(9)} ${splitBar(w.aiPct, 16)}  ${aiPctColored(w.aiPct)}, ${w.buckets.beyond.length} beyond`
+    );
+  }
 
   if (overrideCounts.size > 0) {
     console.log(`\n${c.bold("Overrides")} ${c.dim("— you shipped beyond your P anyway (witnessed, not judged)")}`);

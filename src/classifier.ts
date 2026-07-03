@@ -194,12 +194,20 @@ ${numbered}`,
   return out;
 }
 
+export interface ClassifyOpts {
+  /** per-request cap for callers that must stay fast (the v3 gate) —
+   *  a timed-out batch stays uncached and retries at the next report */
+  timeoutMs?: number;
+  maxRetries?: number;
+}
+
 /** Classify every input not already cached; mutates and persists the cache.
  *  Without an API key this still produces tags (concepts stay empty). */
 export async function classifyAll(
   cachePath: string,
   inputs: ClassifyInput[],
-  vaultTitles: string[]
+  vaultTitles: string[],
+  opts: ClassifyOpts = {}
 ): Promise<{ cache: ClassifyCache; stats: ClassifyStats }> {
   const cache = loadCache(cachePath);
   const stats: ClassifyStats = { cached: 0, tagged: 0, llmMapped: 0, apiCalls: 0 };
@@ -239,7 +247,7 @@ export async function classifyAll(
   let tier2Ran = false;
   if (apiKey) {
     tier2Ran = true;
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey, timeout: opts.timeoutMs, maxRetries: opts.maxRetries });
     const items = [...pending.values()];
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
