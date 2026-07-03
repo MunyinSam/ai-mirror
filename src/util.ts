@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 export function sha256(text: string): string {
@@ -22,4 +23,20 @@ export function langOf(file: string): string {
 
 export function daysBetween(fromIso: string, to: Date): number {
   return Math.floor((to.getTime() - new Date(fromIso).getTime()) / 86_400_000);
+}
+
+/** Git repo root containing `dirPath`, or null if it isn't inside one.
+ *  Used so events attribute to the repo actually edited (e.g. in a
+ *  multi-root workspace) instead of the session's launch directory. */
+export function gitRepoRoot(dirPath: string): string | null {
+  try {
+    const out = execSync("git rev-parse --show-toplevel", {
+      cwd: dirPath,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return normalizePath(out.trim());
+  } catch {
+    return null;
+  }
 }

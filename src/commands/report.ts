@@ -202,7 +202,24 @@ function aiPctColored(pct: number): string {
   return pct >= 60 ? c.red(s) : pct >= 30 ? c.yellow(s) : c.green(s);
 }
 
-export async function reportCommand(args: string[]): Promise<void> {
+// Bare-word period aliases ("today" reads more naturally than "--day") that
+// get normalized to their flag form before the real parsing below runs.
+// Positional args are otherwise treated as a project-path filter, so leaving
+// these unrecognized would silently zero out the report instead of erroring.
+const BARE_PERIOD_ALIASES: Record<string, PeriodUnit> = {
+  today: "day",
+  day: "day",
+  week: "week",
+  month: "month",
+  year: "year",
+};
+
+export async function reportCommand(rawArgs: string[]): Promise<void> {
+  const args = rawArgs.map((a) => {
+    const alias = BARE_PERIOD_ALIASES[a];
+    return alias ? `--${alias}` : a;
+  });
+
   const json = args.includes("--json");
   const showFiles = args.includes("--files");
 

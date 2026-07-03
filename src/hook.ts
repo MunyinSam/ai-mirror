@@ -6,10 +6,11 @@
 // Known blind spots (by design — the v3 git gate is the universal net):
 //   - code the agent writes via Bash heredocs or NotebookEdit
 //   - Copilot completions / pasting from a browser chat
+import { dirname } from "node:path";
 import { dataPaths } from "./config.ts";
 import { appendEvent } from "./log.ts";
 import { SNIPPET_CAP, type MirrorEvent } from "./types.ts";
-import { langOf, normalizePath, sha256 } from "./util.ts";
+import { gitRepoRoot, langOf, normalizePath, sha256 } from "./util.ts";
 
 const raw = await Bun.stdin.text();
 
@@ -34,7 +35,9 @@ if (input.tool_name === "Edit" || input.tool_name === "Write") {
     author: "ai",
     tool: input.tool_name,
     file,
-    project: normalizePath(input.cwd ?? process.cwd()),
+    // Prefer the git repo root of the file actually edited — in a multi-root
+    // workspace, cwd is the launch directory, not necessarily the repo touched.
+    project: gitRepoRoot(dirname(file)) ?? normalizePath(input.cwd ?? process.cwd()),
     lang: langOf(file),
     lines: code.split("\n").length,
     code_hash: sha256(code),
