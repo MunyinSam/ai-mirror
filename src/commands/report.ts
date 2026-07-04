@@ -349,7 +349,7 @@ export async function reportCommand(rawArgs: string[]): Promise<void> {
       c.dim(
         process.env["ANTHROPIC_API_KEY"]
           ? `\n(no vault concepts detected in this period)`
-          : `\n(no vault concepts mapped — add an ANTHROPIC_API_KEY and run \`mirror classify\`)`
+          : `\n(no vault concepts mapped — add an ANTHROPIC_API_KEY and re-run \`mirror\`)`
       )
     );
   }

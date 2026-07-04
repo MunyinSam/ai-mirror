@@ -5,24 +5,22 @@ const HELP = `
 AI Mirror — watches the code you write with AI and tells you honestly
 how much of it you couldn't have written yourself.
 
-Usage: mirror <command> [options]
+Usage: mirror [command] [options]     running \`mirror\` alone shows this week's report
 
-Commands:
-  report [project] [--day|--week|--month|--year] [--back N] [--files] [--json]
-                                         the mirror report (default: this week)
-  classify                               classify uncached events (tags + vault concepts)
-  gaps [--days N] [--json]               unfiled / beyond-skill / decaying concepts
-  ledger [filter]                        view the skill ledger
-  ledger sync [--days N] [--repo path]   infer P + style samples from hand-written commits
-  ledger set <concept> <level>           manual claim (recorded as ⚠ claimed, not produced)
-  style [--rebuild]                      style corpus status / rebuild the style profile
-  challenge <concept> | grade | list     no-AI challenge: hand-type it, get graded, earn P
-  override <concept> [--reason ...]      log that you shipped beyond your P (the witness)
-  gate install|uninstall [repo]          the v3 pre-commit advisory (never blocks)
-  gate check                             run the advisory on the staged diff
-  setup                                  wire the Claude Code hooks + data directory
-  migrate                                upgrade a v1 event log to schema v2
-  help                                   show this help
+  report [project]     you-vs-AI lines, concepts beyond your skill, trend
+                         --day / --week / --month / --year · --back N · --files · --json
+  gaps                 what to learn next: unfiled, beyond-skill, decaying
+                         --days N · --json
+  ledger [filter]      the skill ledger — U and P per concept
+  ledger sync          credit hand-written commits as P evidence + style samples
+                         --days N · --repo <path>
+  style                style corpus status · --rebuild distills your personal profile
+  challenge <concept>  hand-type a no-AI exercise to earn verified P
+                         then: challenge grade · challenge list
+  override <concept>   witness that you shipped beyond your P · --reason "..."
+  gate install [repo]  pre-commit advisory — never blocks · also: uninstall, check
+  setup                wire hooks, API key, vault, skills, and the gate
+  help                 show this help
 `;
 
 loadEnv();
@@ -33,11 +31,6 @@ switch (cmd) {
   case "report": {
     const { reportCommand } = await import("./commands/report.ts");
     await reportCommand(rest);
-    break;
-  }
-  case "classify": {
-    const { classifyCommand } = await import("./commands/classify.ts");
-    await classifyCommand();
     break;
   }
   case "gaps": {
@@ -73,11 +66,6 @@ switch (cmd) {
   case "setup": {
     const { setupCommand } = await import("./commands/setup.ts");
     await setupCommand();
-    break;
-  }
-  case "migrate": {
-    const { migrateCommand } = await import("./commands/migrate.ts");
-    migrateCommand();
     break;
   }
   case "help":

@@ -26,7 +26,7 @@ Past weeks:
 
 The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
 
-**Read [CONCEPTS.md](CONCEPTS.md) for the why. Read [PLAN.md](PLAN.md) for the build.**
+**Read [CONCEPTS.md](CONCEPTS.md) for the why. Read [PLAN.md](PLAN.md) for the build. Read [docs/how-it-works.md](docs/how-it-works.md) for the architecture (with diagrams) and [docs/commands.md](docs/commands.md) for every command in detail.**
 
 ---
 
@@ -58,11 +58,9 @@ bun run setup
 echo "ANTHROPIC_API_KEY=sk-..." > .env   # optional
 ```
 
-Setup wires the hook into `~/.claude/settings.json`, links the `mirror` command, and offers two opt-ins: installing the companion skills (**/gaps** — triage what the mirror found, **/drill** — 10-minute learn-and-earn, **/mirror-week** — the Friday ritual) and adding the observe-only policy block to your global `~/.claude/CLAUDE.md`.
+Setup wires the hook into `~/.claude/settings.json`, links the `mirror` command, and offers opt-ins along the way: an API key for concept mapping, a minimal vault scaffold (defaulting to your most recent Obsidian vault when one is detectable), the companion skills (**/gaps** — triage what the mirror found, **/drill** — 10-minute learn-and-earn, **/mirror-week** — the Friday ritual), the commit-time gate advisory for a repo of your choice, and the observe-only policy block in your global `~/.claude/CLAUDE.md`.
 
 Then **restart Claude Code** — hooks and skills load on startup.
-
-Upgrading from the v1 log format? Run `mirror migrate` once.
 
 ---
 
@@ -71,10 +69,8 @@ Upgrading from the v1 log format? Run `mirror migrate` once.
 | Command | What it does |
 |---------|--------------|
 | `mirror` | the report — `--day` / `--week` / `--month` / `--year` views, `--back N` to go back, a project path to filter, `--files` for per-file detail, `--json` for scripts. Auto-credits recent hand-written commits (last 30 days) on every run. |
-| `mirror classify` | classify uncached events now (otherwise happens at report time) |
 | `mirror ledger` | view U / stored P / effective (decayed) P per concept |
 | `mirror ledger sync` | scan recent commits for hand-written code → P evidence + style samples |
-| `mirror ledger set <concept> <1-4>` | manual claim — recorded as ⚠ claimed, never as verified |
 | `mirror style` | style corpus status |
 | `mirror style --rebuild` | distill your personal style profile + `style-guide.md` + prompt digest |
 | `mirror challenge <concept>` | generate a no-AI challenge sandbox; hand-type the solution to earn verified P (the only path to L2–L4) |

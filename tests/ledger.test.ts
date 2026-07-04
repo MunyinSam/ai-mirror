@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addProducedEvidence, daysUntilDecay, effectiveP, isClaimedOnly, setClaimedLevel } from "../src/ledger.ts";
+import { addProducedEvidence, daysUntilDecay, effectiveP, isClaimedOnly } from "../src/ledger.ts";
 import type { Ledger, LedgerEntry } from "../src/types.ts";
 import { confidenceToU } from "../src/vault.ts";
 
@@ -70,11 +70,11 @@ describe("evidence", () => {
     expect(isClaimedOnly(e)).toBe(false);
   });
 
-  test("manual claims never count as produced", () => {
-    const ledger: Ledger = { updated: "", concepts: {} };
-    setClaimedLevel(ledger, "react-hooks", 2);
-    const e = ledger.concepts["react-hooks"]!;
-    expect(e.coding_level).toBe(2);
+  test("claimed evidence in existing data never counts as produced", () => {
+    const e = entry({
+      coding_level: 2,
+      evidence: [{ type: "claimed", ref: "manual", date: "2026-07-01T00:00:00Z" }],
+    });
     expect(isClaimedOnly(e)).toBe(true);
   });
 });

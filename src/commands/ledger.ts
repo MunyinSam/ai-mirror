@@ -1,14 +1,13 @@
 import { dataPaths } from "../config.ts";
 import {
   daysUntilDecay, effectiveP, isClaimedOnly,
-  loadLedger, saveLedger, setClaimedLevel, syncUnderstanding,
+  loadLedger, saveLedger, syncUnderstanding,
 } from "../ledger.ts";
 import { syncHandwritten } from "../sync.ts";
 import { loadVaultConcepts } from "../vault.ts";
 
 export async function ledgerCommand(args: string[]): Promise<void> {
   const sub = args[0];
-  if (sub === "set") return setCommand(args.slice(1));
   if (sub === "sync") return syncCommand(args.slice(1));
   return listCommand(
     args.includes("--json"),
@@ -64,21 +63,6 @@ function listCommand(json: boolean, filter?: string): void {
     );
   }
   console.log();
-}
-
-function setCommand(args: string[]): void {
-  const [concept, levelArg] = args;
-  const level = Number(levelArg);
-  if (!concept || !Number.isInteger(level) || level < 1 || level > 4) {
-    console.error("Usage: mirror ledger set <concept> <level 1-4>");
-    process.exit(1);
-  }
-  const paths = dataPaths();
-  const ledger = loadLedger(paths.skills);
-  setClaimedLevel(ledger, concept, level);
-  saveLedger(paths.skills, ledger);
-  console.log(`✓ Claimed P${level} for "${concept}" — recorded as claimed (⚠), not produced.`);
-  console.log("  Producing the code unaided is the only way to earn a verified level.");
 }
 
 async function syncCommand(args: string[]): Promise<void> {

@@ -2,7 +2,7 @@
 // by producing code. Decay is computed at read time; stored values are never
 // destroyed.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { DEFAULT_DECAY, type Evidence, type Ledger, type LedgerEntry } from "./types.ts";
+import { DEFAULT_DECAY, type Ledger, type LedgerEntry } from "./types.ts";
 import { confidenceToU, type VaultConcept } from "./vault.ts";
 import { daysBetween } from "./util.ts";
 
@@ -77,12 +77,4 @@ export function addProducedEvidence(
   if (!entry.last_produced || date > entry.last_produced) entry.last_produced = date;
   if (entry.coding_level < 1) entry.coding_level = 1;
   return true;
-}
-
-/** Manual attestation — the escape hatch. Stored as "claimed", never "produced". */
-export function setClaimedLevel(ledger: Ledger, concept: string, level: number): void {
-  const entry = (ledger.concepts[concept] ??= emptyEntry());
-  const claim: Evidence = { type: "claimed", ref: "manual", date: new Date().toISOString() };
-  entry.evidence.push(claim);
-  entry.coding_level = Math.max(entry.coding_level, level);
 }

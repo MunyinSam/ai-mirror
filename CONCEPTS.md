@@ -171,7 +171,7 @@ Key rules:
 - **Effective P = stored P decayed by time since you last produced it** (one level per full decay window, computed at read time — stored values are never destroyed). Knowing ≠ remembering; the ledger must not lie to you six months later.
 - **The gate reads P.** U is supporting context.
 - **You can't *file* your way to a higher P — you have to *produce* your way there.** This is what stops you from stubbing a fake note to unlock the gate. It's stronger than a quiz: the unlock *is* writing the code.
-- **Evidence types are honest.** `produced` = provenance-verified hand-written code. `claimed` = a manual `mirror ledger set` attestation — allowed as an escape hatch, but always shown with a ⚠ and never counted as verified.
+- **Evidence types are honest.** `produced` = provenance-verified hand-written code. `claimed` = a manual attestation (the `mirror ledger set` escape hatch, since removed) — old claimed entries still render with a ⚠ and never count as verified.
 
 The ledger is **seeded** from two sources:
 1. **Your Obsidian vault** → each concept note's `confidence:` (learning/solid/fluent) maps to U 1–3. The vault owns U; the ledger only mirrors it.

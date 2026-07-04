@@ -115,11 +115,13 @@ function hooksDir(repo: string): string {
   return resolve(repo, out);
 }
 
-function gateInstall(target?: string): void {
+/** Also called by `mirror setup`'s gate offer — reports failure instead of
+ *  exiting so setup can continue. */
+export function gateInstall(target?: string): boolean {
   const repo = gitRepoRoot(target ?? process.cwd());
   if (!repo) {
     console.error(`Not a git repository: ${target ?? process.cwd()}`);
-    process.exit(1);
+    return false;
   }
   const hookPath = resolve(hooksDir(repo), "pre-commit");
   const chainedPath = hookPath + CHAINED_SUFFIX;
@@ -129,11 +131,11 @@ function gateInstall(target?: string): void {
     if (existing.includes(HOOK_MARKER)) {
       writeFileSync(hookPath, hookScript(), "utf8");
       console.log(`✓ Refreshed the gate hook in ${repo}`);
-      return;
+      return true;
     }
     if (existsSync(chainedPath)) {
       console.error(`⚠ Both a foreign pre-commit and ${chainedPath} exist — untangle them by hand first.`);
-      process.exit(1);
+      return false;
     }
     renameSync(hookPath, chainedPath);
     console.log(`✓ Existing pre-commit hook preserved (chained as pre-commit${CHAINED_SUFFIX})`);
@@ -147,6 +149,7 @@ function gateInstall(target?: string): void {
   }
   console.log(`✓ Gate installed: ${hookPath}`);
   console.log(c.dim("  Advisory only — it reads the staged diff, names beyond-skill concepts, never blocks."));
+  return true;
 }
 
 function gateUninstall(target?: string): void {
@@ -182,7 +185,7 @@ export async function gateCommand(rawArgs: string[]): Promise<void> {
       }
       break;
     case "install":
-      gateInstall(rest[0]);
+      if (!gateInstall(rest[0])) process.exit(1);
       break;
     case "uninstall":
       gateUninstall(rest[0]);

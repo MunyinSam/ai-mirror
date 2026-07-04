@@ -12,9 +12,11 @@ import { langOf, normalizePath } from "./util.ts";
  *  signal and are excluded from matching. */
 const MIN_SIGNIFICANT_LEN = 8;
 
-/** A hunk counts as AI-written when at least this share of its significant
- *  lines appears in the AI snippet log. */
-const AI_MATCH_THRESHOLD = 0.5;
+/** A hunk is excluded from "hand-written" the moment at least this share of
+ *  its significant lines appears in the AI snippet log. Kept low (rather than
+ *  0.5) because this feeds the style corpus (style.ts): a hunk that's even a
+ *  fifth AI-derived shouldn't teach the profile Claude's own habits. */
+const AI_MATCH_THRESHOLD = 0.15;
 
 /** Hunks smaller than this are too thin to classify or learn style from. */
 const MIN_HUNK_LINES = 3;
