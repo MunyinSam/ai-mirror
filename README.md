@@ -5,23 +5,21 @@ AI Mirror watches the code you write with AI, tells you honestly how much of it 
 It blocks nothing (yet). It just holds up a mirror:
 
 ```
-AI Mirror — week of 2026-06-27 → 2026-07-04  [all projects]
+AI Mirror — week of 2026-06-28 → 2026-07-04  [all projects]
 ────────────────────────────────────────────────────────
-Code shipped:        2149 lines
-  you: 1714  ·  AI: 435  →  20% AI-written
+Code shipped   5822 lines
+  ██████████████████░░░░░░  you 4425 · AI 1397 → 24% AI-written
 
-Concepts the AI handled for you:
-   ✓ within your skill:   7
-   ⚠ beyond your skill:   3
-        · Claude Code Hooks                used 2×
-        · Tree-sitter                      used 1×
+Concepts the AI handled for you
+   ✓ within your skill    2
+   ⚠ beyond your skill    1
         · Python async/await and the Event Loop used 1×
 
 Days shipping only within your skill: 1 🔥
 
 Past weeks:
-   wk 06-20  ████████████████  0% AI-written, 0 beyond
-   wk 06-13  ████████████████  0% AI-written, 0 beyond
+   wk 06-21  ████████████████  0% AI-written, 0 beyond
+   wk 06-14  ████████████████  0% AI-written, 0 beyond
 ```
 
 The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
@@ -54,8 +52,7 @@ The `⚠ beyond your skill` list is your vibe-coding fingerprint, made visible.
 git clone https://github.com/MunyinSam/ai-mirror
 cd ai-mirror
 bun install
-bun run setup
-echo "ANTHROPIC_API_KEY=sk-..." > .env   # optional
+bun run setup    # prompts for the API key, vault, skills, and gate along the way
 ```
 
 Setup wires the hook into `~/.claude/settings.json`, links the `mirror` command, and offers opt-ins along the way: an API key for concept mapping, a minimal vault scaffold (defaulting to your most recent Obsidian vault when one is detectable), the companion skills (**/gaps** — triage what the mirror found, **/drill** — 10-minute learn-and-earn, **/mirror-week** — the Friday ritual), the commit-time gate advisory for a repo of your choice, and the observe-only policy block in your global `~/.claude/CLAUDE.md`.
@@ -69,15 +66,19 @@ Then **restart Claude Code** — hooks and skills load on startup.
 | Command | What it does |
 |---------|--------------|
 | `mirror` | the report — `--day` / `--week` / `--month` / `--year` views, `--back N` to go back, a project path to filter, `--files` for per-file detail, `--json` for scripts. Auto-credits recent hand-written commits (last 30 days) on every run. |
+| `mirror gaps` | what to learn next: unfiled / beyond-skill / decaying concepts (`--days N`, `--json`) — the feed the `/gaps` skill triages |
 | `mirror ledger` | view U / stored P / effective (decayed) P per concept |
 | `mirror ledger sync` | scan recent commits for hand-written code → P evidence + style samples |
 | `mirror style` | style corpus status |
 | `mirror style --rebuild` | distill your personal style profile + `style-guide.md` + prompt digest |
-| `mirror challenge <concept>` | generate a no-AI challenge sandbox; hand-type the solution to earn verified P (the only path to L2–L4) |
+| `mirror challenge <concept>` | generate a no-AI challenge sandbox; hand-type the solution to earn verified P (the only path to P2–P4) |
 | `mirror challenge grade` | provenance-check the sandbox (AI edits void it), then LLM-grade against the rubric |
 | `mirror override <concept>` | log that you shipped code beyond your P — witnessed, never blocked |
-| `mirror gate install [repo]` | wire the v3 pre-commit advisory into a repo (chains any existing hook; `uninstall` restores it) |
+| `mirror gate install [repo]` | wire the pre-commit advisory into a repo (chains any existing hook; `uninstall` restores it) |
 | `mirror gate check` | what the hook runs: classify the staged diff, name beyond-skill concepts, always exit 0 |
+| `mirror setup` | the installer — idempotent, re-run anytime (e.g. to refresh machine paths) |
+
+Full detail on every command — files touched, algorithms, flags — in [docs/commands.md](docs/commands.md).
 
 Data lives in `~/.skillgate/data` (configurable in `mirror.config.json`) as flat JSONL/JSON — human-readable, git-diffable, and schema-ready for Postgres later (`docs/pg-migration.md`).
 
@@ -97,7 +98,7 @@ you-lines = max(0, git lines added across all known repos − AI lines)
 
 where "git lines added" is the added-column total of `git log --numstat` over the period.
 
-**P evidence uses a stricter test.** For crediting skill, `mirror ledger sync` doesn't trust the subtraction. It parses each commit's added hunks and checks them against the logged AI snippets line-by-line: a hunk counts as yours only if it's in a code language, at least 3 lines, and **fewer than half** of its significant lines (trimmed, ≥ 8 chars — braces and blanks carry no authorship signal) appear in the AI snippet log. Surviving hunks become P evidence and style-corpus samples.
+**P evidence uses a stricter test.** For crediting skill, `mirror ledger sync` doesn't trust the subtraction. It parses each commit's added hunks and checks them against the logged AI snippets line-by-line: a hunk counts as yours only if it's in a code language, at least 3 lines, and **fewer than 15%** of its significant lines (trimmed, ≥ 8 chars — braces and blanks carry no authorship signal) appear in the AI snippet log. The threshold is deliberately strict because surviving hunks become P evidence *and* style-corpus samples — a hunk that's even a fifth AI-derived shouldn't teach the style profile the model's own habits.
 
 Consequence of the subtraction: when the AI writes 50 lines and then rewrites them, that's 100 AI lines against ~50 committed — the split can undercount you within a period. That's why the report footer says *trend, not truth*.
 
