@@ -53,3 +53,40 @@ export function coalesceRuns(marks: boolean[], runMin = 3): boolean[] {
 
   return result;
 }
+
+/** Which of a commit's added lines are AI's, given the AI's candidate
+ *  snippets (the after_text of AI events scoped to this file/time-window —
+ *  that scoping happens in attributeCommit, not here). Composes the two
+ *  functions above: normalize both sides so formatting can't hide a match,
+ *  then require a run so a lone coincidental line can't fake one.
+ *
+ *  TODO(you): implement.
+ *    1. Build a Set of normalizeKey(line) for every line in every snippet
+ *       (split each snippet on "\n" first — a snippet is a whole block).
+ *    2. Map addedLines to booleans: is this line's normalized form in the set?
+ *    3. Run that through coalesceRuns(marks, runMin).
+ *    4. Return { addedLines: addedLines.length, aiLines: count of true }.
+ */
+export interface LineAttribution {
+  addedLines: number;
+  aiLines: number;
+}
+
+export function markAiLines(
+  addedLines: string[],
+  aiSnippets: string[],
+  runMin = 3
+): LineAttribution {
+  const aiKeys = new Set<string>();
+  for (const snippet of aiSnippets) {
+    for (const line of snippet.split("\n")) {
+      aiKeys.add(normalizeKey(line))
+    }
+  }
+
+  const marks = addedLines.map((line) => aiKeys.has(normalizeKey(line)));
+  const coalesced = coalesceRuns(marks, runMin)
+  const aiLines = coalesced.filter(Boolean).length;
+
+  return { addedLines: addedLines.length, aiLines };
+}

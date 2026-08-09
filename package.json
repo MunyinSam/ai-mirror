@@ -7,9 +7,7 @@
   },
   "scripts": {
     "migrate": "bun run src/db/migrate.ts",
-    "drain": "bun run src/cli/index.ts drain",
-    "backfill": "bun run src/cli/index.ts backfill",
-    "report": "bun run src/cli/index.ts report",
+    "backfill": "bun run src/cli/backfill.ts",
     "test": "bun test"
   },
   "devDependencies": {

@@ -30,6 +30,26 @@ export function isExcludedPath(file: string): boolean {
   return EXCLUDED_PATH_PATTERNS.some((re) => re.test(file));
 }
 
+/** Repo roots that are real git repos but not YOUR projects — package
+ *  managers and system directories that happen to be version-controlled for
+ *  their own upgrade mechanism (e.g. Homebrew's install prefix). A file
+ *  edited under one of these resolves via gitRepoRoot() to that repo, and
+ *  without this guard its entire unrelated commit history (other people's
+ *  formula bumps, etc.) would get walked and attributed against — diluting
+ *  or skewing the real number with commits that have nothing to do with you. */
+export const EXCLUDED_REPO_PATTERNS = [
+  /^\/opt\/homebrew(\/|$)/,
+  /^\/usr\/local(\/|$)/,
+  /^\/usr(\/|$)/,
+  /^\/System(\/|$)/,
+  /^\/Library(\/|$)/,
+  /^\/nix(\/|$)/,
+];
+
+export function isExcludedRepo(repo: string): boolean {
+  return EXCLUDED_REPO_PATTERNS.some((re) => re.test(repo));
+}
+
 /** Raw shape written by the capture hook into the local queue file — the
  *  wire format between capture and ingest. Deliberately NOT the `events`
  *  table row: ingest derives added_lines/removed_lines/event_uid from this. */
