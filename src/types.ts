@@ -105,6 +105,15 @@ export interface AttributionRow {
   method: string;
 }
 
+export interface ClassifyCacheRow {
+  code_hash: string;
+  tags: string[];
+  concepts: string[];
+  suggested: string[];
+  mapped: boolean;
+  ts: string;
+}
+
 export interface Evidence {
   type: "produced" | "claimed";
   ref: string;

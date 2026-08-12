@@ -9,8 +9,6 @@
 // Every step here is a call to something already built and unit-tested —
 // this file is composition, not new logic. Safe to re-run: draining,
 // importing, and attributing are all idempotent.
-//
-// YOU ARE WRITING each function below. Walkthroughs in chat, one at a time.
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -28,7 +26,7 @@ const LEGACY_SOURCES = [
   join(homedir(), ".skillgate", "data", "events.jsonl"), // the original v1 data dir
 ];
 
-/** Claim and drain every file sitting in the live queue dir.*/
+/** Claim and drain every file sitting in the live queue dir. */
 async function drainLiveQueue(sql: Sql): Promise<{ inserted: number; skipped: number }> {
   let inserted = 0;
   let skipped = 0;
@@ -42,7 +40,7 @@ async function drainLiveQueue(sql: Sql): Promise<{ inserted: number; skipped: nu
   return { inserted, skipped }
 }
 
-/** Import both legacy sources.*/
+/** Import both legacy sources. */
 async function importLegacySources(sql: Sql): Promise<void> {
   for (const path of LEGACY_SOURCES) {
     const r = await importLegacyFile(sql, path);
