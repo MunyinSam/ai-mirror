@@ -115,7 +115,7 @@ export interface ClassifyCacheRow {
 }
 
 export interface Evidence {
-  type: "produced" | "claimed";
+  type: "produced" | "claimed" | "session";
   ref: string;
   date: string;
 }

@@ -6,7 +6,7 @@ import { daysBetween } from "../util.ts";
 
 /** True when P rests solely on manual claims, never on verified production. */
 export function isClaimedOnly(entry: LedgerEntry): boolean {
-  return entry.coding_level > 0 && !entry.evidence.some((e) => e.type === "produced");
+  return entry.coding_level > 0 && !entry.evidence.some((e) => e.type === "produced" || e.type === "session");
 }
 
 /** Stored coding_level minus one level per full decay window since the last
@@ -17,8 +17,9 @@ export function effectiveP(entry: LedgerEntry, now = new Date()): number {
 
   const baseline =
     entry.last_produced ??
-    entry.evidence.filter((e) => e.type === "claimed").at(-1)?.date ??
-    null;
+    entry.evidence.filter((e) => e.type === "session").at(-1)?.date ??
+    entry.evidence.filter((e) => e.type === "claimed").at(-1)?.date;
+
   if (!baseline) return entry.coding_level;
 
   const days = Math.max(0, daysBetween(baseline, now));
@@ -30,9 +31,12 @@ export function effectiveP(entry: LedgerEntry, now = new Date()): number {
  *  with no baseline to count from. */
 export function daysUntilDecay(entry: LedgerEntry, now = new Date()): number | null {
   if (effectiveP(entry, now) === 0) return null;
-
+  
   const baseline =
-    entry.last_produced ?? entry.evidence.filter((e) => e.type === "claimed").at(-1)?.date;
+    entry.last_produced ??
+    entry.evidence.filter((e) => e.type === "session").at(-1)?.date ??
+    entry.evidence.filter((e) => e.type === "claimed").at(-1)?.date;
+
   if (!baseline) return null;
 
   const days = Math.max(0, daysBetween(baseline, now));

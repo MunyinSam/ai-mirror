@@ -133,9 +133,13 @@ One row per concept (`concept_id` is both the primary key and the FK — a
 ## `evidence` — the append-only proof feeding P
 
 - `type` is `'produced'` (you shipped a commit using this concept, verified
-  by attribution) or `'claimed'` (you said you know it, unverified —
-  see `isClaimedOnly` in `skill.ts`, which flags ledger entries that rest
-  *only* on claims).
+  by attribution), `'session'` (a tutor session fired for this concept and
+  you didn't override it — written by the Stop hook, never verified against
+  a real commit, so weaker than `'produced'` but stronger than a bare
+  claim), or `'claimed'` (you said you know it, unverified — see
+  `isClaimedOnly` in `skill.ts`, which flags ledger entries that rest
+  *only* on claims and treats both `'produced'` and `'session'` as real
+  evidence).
 - `UNIQUE (concept_id, type, ref)` is what makes "credit this commit" an
   idempotent operation — crediting the same commit against the same concept
   twice is a no-op, so the crediting pass can just be re-run freely instead
