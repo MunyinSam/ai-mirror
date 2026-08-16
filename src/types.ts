@@ -1,82 +1,132 @@
-// Single source of truth for every schema in the system.
-// All shapes are flat and JSON-serializable so they port to Postgres unchanged
-// (see docs/pg-migration.md).
+// Single source of truth for cross-layer shapes. Mirrors the Postgres schema
+// in src/db/migrations/001_init.sql — these are the JS-side views of the
+// same rows, kept flat and JSON-serializable on purpose.
 
-/** One provenance event, appended by the hook. The log is append-only and
- *  immutable — classification results live in the cache, never here. */
-export interface MirrorEvent {
-  v: 2;
-  ts: string;
-  author: "ai" | "you";
-  tool: string;
-  file: string;
-  project: string;
-  /** file extension without the dot, e.g. "ts", "py"; "" if none */
-  lang: string;
-  lines: number;
-  /** "sha256:<hex>" of the full written code; "legacy:<n>" for migrated v1 rows */
-  code_hash: string;
-  /** raw written code, truncated to SNIPPET_CAP bytes */
-  snippet: string;
-}
-
-export const SNIPPET_CAP = 8 * 1024;
-
-/** Languages the classifier understands. Everything else (markdown, JSON,
- *  configs) is provenance-logged but never concept-classified. */
+/** Languages the classifier & attributor understand. Everything else
+ *  (markdown, JSON, configs) is captured but never concept-classified, and
+ *  excluded from line-attribution denominators. */
 export const CODE_LANGS = new Set(["ts", "tsx", "js", "jsx", "py"]);
 
-/** Classification result for one code_hash. Tier 1 = tags, Tier 2 = concepts. */
-export interface CacheEntry {
-  /** deterministic tree-sitter syntax tags */
+export const SNIPPET_CAP = 32 * 1024;
+
+/** Path fragments excluded from BOTH numerator and denominator of every line
+ *  count. Applying this to human lines too (not just AI lines) is what stops
+ *  a vendored bundle or a lockfile from silently inflating "lines you wrote". */
+export const EXCLUDED_PATH_PATTERNS = [
+  /(^|\/)node_modules\//,
+  /(^|\/)dist\//,
+  /(^|\/)build\//,
+  /(^|\/)\.next\//,
+  /\.min\.[jt]s$/,
+  /(^|\/)vendor\//,
+  /package-lock\.json$/,
+  /bun\.lock$/,
+  /yarn\.lock$/,
+  /pnpm-lock\.yaml$/,
+  /(^|\/)__snapshots__\//,
+];
+
+export function isExcludedPath(file: string): boolean {
+  return EXCLUDED_PATH_PATTERNS.some((re) => re.test(file));
+}
+
+/** Repo roots that are real git repos but not YOUR projects — package
+ *  managers and system directories that happen to be version-controlled for
+ *  their own upgrade mechanism (e.g. Homebrew's install prefix). A file
+ *  edited under one of these resolves via gitRepoRoot() to that repo, and
+ *  without this guard its entire unrelated commit history (other people's
+ *  formula bumps, etc.) would get walked and attributed against — diluting
+ *  or skewing the real number with commits that have nothing to do with you. */
+export const EXCLUDED_REPO_PATTERNS = [
+  /^\/opt\/homebrew(\/|$)/,
+  /^\/usr\/local(\/|$)/,
+  /^\/usr(\/|$)/,
+  /^\/System(\/|$)/,
+  /^\/Library(\/|$)/,
+  /^\/nix(\/|$)/,
+];
+
+export function isExcludedRepo(repo: string): boolean {
+  return EXCLUDED_REPO_PATTERNS.some((re) => re.test(repo));
+}
+
+/** Raw shape written by the capture hook into the local queue file — the
+ *  wire format between capture and ingest. Deliberately NOT the `events`
+ *  table row: ingest derives added_lines/removed_lines/event_uid from this. */
+export interface QueuedEvent {
+  ts: string;
+  tool: string;
+  session_id?: string;
+  repo: string;
+  file: string;
+  lang: string;
+  code_hash: string;
+  before_text: string | null;
+  after_text: string;
+  truncated: boolean;
+}
+
+export interface EventRow {
+  id: number;
+  event_uid: string;
+  ts: string;
+  tool: string;
+  session_id: string | null;
+  repo: string;
+  file: string;
+  lang: string;
+  code_hash: string;
+  before_text: string | null;
+  after_text: string;
+  added_lines: number;
+  removed_lines: number;
+  truncated: boolean;
+}
+
+export interface CommitRow {
+  id: number;
+  repo: string;
+  sha: string;
+  ts: string;
+  author_email: string;
+  subject: string;
+  attributed_at: string | null;
+}
+
+export interface AttributionRow {
+  id: number;
+  commit_id: number;
+  file: string;
+  lang: string;
+  added_lines: number;
+  ai_lines: number;
+  human_lines: number;
+  candidate_events: number;
+  method: string;
+}
+
+export interface ClassifyCacheRow {
+  code_hash: string;
   tags: string[];
-  /** vault note titles only (canonical concept namespace) */
   concepts: string[];
-  /** true once Tier 2 (LLM mapping) has run — entries cached without an API
-   *  key stay false and get backfilled when a key appears */
+  suggested: string[];
   mapped: boolean;
-  /** concept names the mapper wanted but that aren't in the vault — the raw
-   *  material for `mirror gaps` (never mixed into concepts[]) */
-  suggested?: string[];
   ts: string;
 }
 
-export type ClassifyCache = Record<string, CacheEntry>;
-
 export interface Evidence {
-  /** "produced" = verified hand-written code; "claimed" = manual attestation */
-  type: "produced" | "claimed";
-  /** e.g. "commit:abc1234" or "manual" */
+  type: "produced" | "claimed" | "session";
   ref: string;
   date: string;
 }
 
 export interface LedgerEntry {
-  /** U 0-3, mirrored from the vault's confidence frontmatter on every sync */
+  concept: string;
   understanding: number;
-  /** stored P — highest verified level; effective P is computed at read time */
   coding_level: number;
   last_produced: string | null;
   decay_days: { u: number; p: number };
   evidence: Evidence[];
 }
 
-export interface Ledger {
-  updated: string;
-  concepts: Record<string, LedgerEntry>;
-}
-
 export const DEFAULT_DECAY = { u: 180, p: 45 };
-
-/** One verified hand-written code sample feeding the style corpus. */
-export interface StyleSample {
-  ts: string;
-  project: string;
-  file: string;
-  lang: string;
-  code: string;
-  concepts: string[];
-  commit: string;
-  /** sha256 of code — dedupe key */
-  hash: string;
-}

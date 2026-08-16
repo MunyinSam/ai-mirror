@@ -37,3 +37,6 @@ data/
 .DS_Store
 
 mirror.config.json
+
+# session continuity notes (personal, not part of the project docs)
+SESSION.md

@@ -1,0 +1,25 @@
+# One command to stand up the store: `docker compose up -d`.
+# pgvector/pgvector ships Postgres with the vector extension already compiled in,
+# so `CREATE EXTENSION vector` in migration 001 just works.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ai-mirror-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mirror
+      POSTGRES_PASSWORD: mirror
+      POSTGRES_DB: ai_mirror
+    ports:
+      # 5433 on the host so this never collides with a local Postgres on 5432.
+      - "5433:5432"
+    volumes:
+      - mirror-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mirror -d ai_mirror"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mirror-pgdata:

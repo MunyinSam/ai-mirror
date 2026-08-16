@@ -1,3 +1,5 @@
+// Path/hash/date primitives shared by every layer. Carried over from the old
+// implementation near-verbatim — this part was never the problem.
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
@@ -14,7 +16,7 @@ export function normalizePath(p: string): string {
     : withSlashes;
 }
 
-/** Extension without the dot, lowercased: "src/a.TS" → "ts"; "" if none. */
+/** Extension without the dot, lowercased: "src/a.TS" -> "ts"; "" if none. */
 export function langOf(file: string): string {
   const base = file.slice(file.lastIndexOf("/") + 1).slice(file.lastIndexOf("\\") + 1);
   const dot = base.lastIndexOf(".");
